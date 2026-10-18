@@ -1,0 +1,52 @@
+.ring {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex: none;
+}
+
+.ring--sm {
+  width: 104px;
+  height: 104px;
+}
+
+.ring--lg {
+  width: 176px;
+  height: 176px;
+}
+
+.ring__inner {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.ring--sm .ring__inner {
+  top: 14px;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+}
+
+.ring--lg .ring__inner {
+  top: 20px;
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
+}
+
+.ring__label {
+  position: relative;
+  z-index: 1;
+  font-weight: 800;
+}
+
+.ring--sm .ring__label {
+  font-size: 28px;
+}
+
+.ring--lg .ring__label {
+  font-size: 44px;
+}

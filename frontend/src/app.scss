@@ -1,0 +1,73 @@
+/* ===== 全局设计令牌（严格取自原型 03 设计系统板 + 01 核心流程）=====
+   注意：designWidth=750，故所有 px 值 = 原型 px × 2（原型基于 ~375pt 逻辑宽）。
+   颜色令牌用 CSS 自定义属性挂在 page 上，全局可用。 */
+
+@use './styles/icons.scss';
+
+page {
+  /* 颜色 */
+  --bg: #f6f4ef;
+  --panel: rgba(255, 255, 255, 0.92);
+  --text: #1f2d37;
+  --muted: #6c7b87;
+  --orange: #ff7a2f;
+  --orange-deep: #df5f1f;
+  --orange-soft: #fff1e6;
+  --orange-card: #fff6ef;
+  --green: #2e9e71;
+  --green-soft: #eff9f3;
+  --blue: #4e9fff;
+  --blue-soft: #edf5ff;
+  --red: #ff6f5d;
+  --red-soft: #ffefec;
+  --line: #ecdccc;
+
+  /* 字体：小程序无法直接加载 Google Fonts，用系统字体栈近似 Plus Jakarta / Noto Sans SC */
+  --font-title: 'Plus Jakarta Sans', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  background-color: #f6f4ef;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 28px;
+  line-height: 1.5;
+}
+
+view,
+text,
+button,
+input,
+textarea,
+image,
+scroll-view,
+navigator {
+  box-sizing: border-box;
+}
+
+/* 去除 button 默认样式 */
+button {
+  padding: 0;
+  margin: 0;
+  background: none;
+  line-height: normal;
+  border: none;
+  border-radius: 0;
+}
+button::after {
+  border: none;
+}
+
+/* 通用工具类 */
+.row {
+  display: flex;
+  align-items: center;
+}
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+}

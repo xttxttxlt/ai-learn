@@ -1,0 +1,21 @@
+.coin-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(90deg, #ff8a45 0%, #ff6f27 100%);
+  line-height: 1;
+}
+
+.coin-pill__num {
+  font-size: 26px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.coin-pill__icon {
+  width: 36px;
+  height: 36px;
+}
