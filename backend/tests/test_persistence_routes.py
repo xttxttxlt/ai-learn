@@ -123,3 +123,32 @@ def test_report_generate_anonymous_skips_persist(monkeypatch):
     )
     assert resp.json()["code"] == 0
     assert calls == []
+
+
+def test_quiz_progress_endpoint_saves(monkeypatch):
+    calls = []
+
+    async def fake_save(quiz_id, user_id, index, records):
+        calls.append((quiz_id, user_id, index, len(records)))
+
+    monkeypatch.setattr(quiz_route.quiz_repository, "save_progress", fake_save)
+    resp = client.post(
+        "/api/v1/quiz/progress",
+        json={
+            "quiz_id": "quiz_t1",
+            "index": 2,
+            "records": [
+                {"question_id": "q1", "selected_answers": ["A"], "is_correct": True, "duration_ms": 5}
+            ],
+        },
+        headers=HEADERS,
+    )
+    assert resp.json()["code"] == 0
+    assert calls == [("quiz_t1", 7, 2, 1)]
+
+
+def test_quiz_progress_endpoint_requires_auth(monkeypatch):
+    resp = client.post(
+        "/api/v1/quiz/progress", json={"quiz_id": "quiz_t1", "index": 0, "records": []}
+    )
+    assert resp.json()["code"] == 4010

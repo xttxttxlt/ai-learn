@@ -64,8 +64,13 @@ export default function Profile() {
     }
   }
 
-  const openHistory = (quizId: string) => {
-    Taro.navigateTo({ url: `/pages/report/index?quiz_id=${quizId}` })
+  const openHistory = (item: QuizHistoryItem) => {
+    // 已完成 → 回看报告；未完成 → 断点续答
+    if (item.accuracy !== null) {
+      Taro.navigateTo({ url: `/pages/report/index?quiz_id=${item.quiz_id}` })
+    } else {
+      Taro.navigateTo({ url: `/pages/quiz/index?quiz_id=${item.quiz_id}` })
+    }
   }
 
   const nickname = profile?.nickname || '学习者'
@@ -118,7 +123,7 @@ export default function Profile() {
         </View>
       ) : (
         history.map(item => (
-          <View className='item' key={item.quiz_id} onClick={() => openHistory(item.quiz_id)}>
+          <View className='item' key={item.quiz_id} onClick={() => openHistory(item)}>
             <View className='item__avatar'>
               <View className='icon icon-book item__avatar-icon' />
             </View>
@@ -133,7 +138,9 @@ export default function Profile() {
                 color={item.accuracy >= 50 ? '#ff7a2f' : '#47a4ff'}
               />
             ) : (
-              <Text className='item__unfinished'>未完成</Text>
+              <Text className='item__status'>
+                {item.answered_count ? `已答 ${item.answered_count}/${item.question_count ?? ''}` : '未完成'}
+              </Text>
             )}
           </View>
         ))

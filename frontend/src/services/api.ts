@@ -1,5 +1,6 @@
 import { request } from './request'
 import type {
+  AnswerRecord,
   Quiz,
   QuizGenerateParams,
   Report,
@@ -11,6 +12,10 @@ import type {
 
 export function generateQuiz(params: QuizGenerateParams) {
   return request<Quiz>('/api/v1/quiz/generate', { method: 'POST', data: params })
+}
+
+export function saveQuizProgress(params: { quiz_id: string; index: number; records: AnswerRecord[] }) {
+  return request<null>('/api/v1/quiz/progress', { method: 'POST', data: params })
 }
 
 export function generateReport(params: ReportGenerateParams) {

@@ -105,21 +105,31 @@
   color: #df5f1f;
 }
 
-/* 多选确认 */
-.confirm-btn {
-  height: 84px;
-  margin-top: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #ff944f, #ff6f27);
-  box-shadow: 0 12px 24px rgba(255, 122, 47, 0.24);
-}
-.confirm-btn text {
-  color: #fff;
-  font-size: 28px;
+/* 题干后的题型气泡 */
+.qtype {
+  display: inline-block;
+  margin-left: 16px;
+  padding: 2px 14px;
+  border-radius: 10px;
+  border: 2px solid;
+  background: #fff;
+  font-size: 24px;
   font-weight: 800;
+  line-height: 1.5;
+  vertical-align: middle;
+  font-family: inherit;
+}
+.qtype--single {
+  color: #47a4ff;
+  border-color: #47a4ff;
+}
+.qtype--multiple {
+  color: #67c23a;
+  border-color: #67c23a;
+}
+.qtype--judge {
+  color: #faad14;
+  border-color: #faad14;
 }
 
 /* 结果提示 */
@@ -252,4 +262,47 @@
   color: #fff;
   font-size: 28px;
   font-weight: 800;
+}
+
+/* 接地：参考来源（可折叠） */
+.sources-box {
+  margin-top: 20px;
+  padding: 18px 22px;
+  border: 2px solid #e7d6c6;
+  border-radius: 24px;
+  background: #fffdfa;
+}
+.sources-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sources-head__label {
+  font-size: 26px;
+  font-weight: 800;
+  color: #647380;
+}
+.sources-head__toggle {
+  font-size: 24px;
+  font-weight: 700;
+  color: #cb6227;
+}
+.source-item {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 2px dashed #f0e2d4;
+}
+.source-item__title {
+  display: block;
+  font-size: 26px;
+  font-weight: 700;
+  color: #33424d;
+  line-height: 1.4;
+}
+.source-item__url {
+  display: block;
+  margin-top: 4px;
+  font-size: 22px;
+  color: #8a97a3;
+  word-break: break-all;
 }

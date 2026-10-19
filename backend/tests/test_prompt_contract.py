@@ -1,6 +1,14 @@
 import json
 
-from app.prompts.quiz_prompt import QUIZ_PROMPT_V1, SCHEMA_EXAMPLE
+from app.llm.output_schemas import QuizOutputSchema
+from app.prompts.quiz_prompt import (
+    QUIZ_GROUNDED_PROMPT,
+    QUIZ_PROMPT_V1,
+    QUIZ_V2_SCHEMA_EXAMPLE,
+    RESEARCH_PROMPT_V2,
+    SCHEMA_EXAMPLE,
+    format_research_user_message,
+)
 
 
 def test_prompt_has_expected_input_variables():
@@ -32,3 +40,54 @@ def test_schema_example_is_valid_json():
     data = json.loads(SCHEMA_EXAMPLE)
     assert data["questions"][0]["type"] == "single"
     assert data["questions"][0]["options"][0]["key"] == "A"
+
+
+def test_research_prompt_is_string_and_describes_tools():
+    assert isinstance(RESEARCH_PROMPT_V2, str)
+    for token in ("web_search_brief", "web_search_full", "web_extract"):
+        assert token in RESEARCH_PROMPT_V2
+    # 要求产出研究简报（含解读/关键事实/接地情况）
+    assert "研究简报" in RESEARCH_PROMPT_V2
+    assert "解读" in RESEARCH_PROMPT_V2
+
+
+def test_grounded_prompt_variables_and_interpretation():
+    assert set(QUIZ_GROUNDED_PROMPT.input_variables) == {
+        "question_count",
+        "difficulty_instruction",
+        "schema_example",
+        "research",
+        "user_input",
+    }
+    messages = QUIZ_GROUNDED_PROMPT.format_messages(
+        question_count=5,
+        difficulty_instruction="难易混合",
+        schema_example=QUIZ_V2_SCHEMA_EXAMPLE,
+        research="【解读】按 AI 智能体工程领域",
+        user_input="Harness Engineering",
+    )
+    user_content = messages[1].content
+    assert "interpretation" in user_content
+    assert "研究简报" in user_content
+    assert "Harness Engineering" in user_content
+    # json_mode 需要明确 JSON 指令
+    assert "JSON" in user_content
+
+
+def test_v2_schema_example_is_valid_json():
+    data = json.loads(QUIZ_V2_SCHEMA_EXAMPLE)
+    assert "interpretation" in data
+    assert data["questions"][0]["type"] == "single"
+
+
+def test_research_user_message_formatter():
+    msg = format_research_user_message("什么是 Harness Engineering")
+    assert "Harness Engineering" in msg
+
+
+def test_quiz_output_schema_interpretation_optional():
+    # 不带 interpretation 也能构造（v1 降级链复用同一 schema）
+    schema = QuizOutputSchema(title="t", summary="s", questions=[])
+    assert schema.interpretation == ""
+    schema2 = QuizOutputSchema(title="t", summary="s", interpretation="按 AI 领域", questions=[])
+    assert schema2.interpretation == "按 AI 领域"

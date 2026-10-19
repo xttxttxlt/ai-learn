@@ -38,6 +38,8 @@ async def list_history(user_id: int, page: int = 1, page_size: int = 10) -> Quiz
             title=row["title"],
             accuracy=round(float(row["accuracy"])) if row["accuracy"] is not None else None,
             question_count=int(row["total_questions"]) if row["total_questions"] is not None else None,
+            answered_count=int(row["answered_count"] or 0),
+            current_index=int(row["current_index"] or 0),
             created_at=_fmt_time(row["created_at"]),
         )
         for row in rows
@@ -56,14 +58,21 @@ async def get_detail(user_id: int, quiz_id: str) -> QuizDetail:
     questions = _loads(session["questions_json"]) or []
     answer_records: Optional[Any] = _loads(record["records_json"]) if record else []
     report = _loads(report_row["report_json"]) if report_row else None
+    sources = _loads(session.get("sources_json")) or []
+    progress = _loads(session.get("progress_json")) or []
 
     return QuizDetail(
         quiz_id=session["quiz_id"],
         title=session["title"],
         summary=session["summary"] or "",
+        interpretation=session.get("interpretation") or "",
         created_at=_fmt_time(session["created_at"]),
         questions=questions,
         answer_records=answer_records or [],
         report=report,
         accuracy=round(float(record["accuracy"])) if record and record["accuracy"] is not None else None,
+        sources=sources,
+        grounded=bool(session.get("grounded")),
+        progress=progress,
+        current_index=int(session.get("current_index") or 0),
     )

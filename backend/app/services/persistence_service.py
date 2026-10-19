@@ -26,6 +26,9 @@ async def persist_quiz(user_id: int, quiz: Quiz) -> None:
             summary=quiz.summary,
             user_input=quiz.user_input,
             questions=[q.model_dump() for q in quiz.questions],
+            interpretation=quiz.interpretation,
+            sources=[s.model_dump() for s in quiz.sources],
+            grounded=quiz.grounded,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("persist_quiz_failed", quiz_id=quiz.quiz_id, error=str(exc))

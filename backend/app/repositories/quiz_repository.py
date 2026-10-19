@@ -13,13 +13,27 @@ async def insert_quiz_session(
     summary: str,
     user_input: str,
     questions: list[dict],
+    interpretation: str = "",
+    sources: Optional[list[dict]] = None,
+    grounded: bool = False,
 ) -> None:
     await db.execute(
         """INSERT INTO quiz_sessions
-               (quiz_id, user_id, title, summary, user_input, questions_json)
-           VALUES (%s, %s, %s, %s, %s, %s)
+               (quiz_id, user_id, title, summary, user_input, questions_json,
+                interpretation, sources_json, grounded)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
            ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)""",
-        (quiz_id, user_id, title, summary, user_input, json.dumps(questions, ensure_ascii=False)),
+        (
+            quiz_id,
+            user_id,
+            title,
+            summary,
+            user_input,
+            json.dumps(questions, ensure_ascii=False),
+            interpretation,
+            json.dumps(sources or [], ensure_ascii=False),
+            int(bool(grounded)),
+        ),
     )
 
 
@@ -68,6 +82,16 @@ async def insert_report(quiz_id: str, user_id: int, report: dict) -> None:
     )
 
 
+async def save_progress(quiz_id: str, user_id: int, index: int, records: list[dict]) -> None:
+    """断点续答进度落库（仅更新本人会话；不存在则不更新）。"""
+    await db.execute(
+        """UPDATE quiz_sessions
+           SET progress_json = %s, current_index = %s
+           WHERE quiz_id = %s AND user_id = %s""",
+        (json.dumps(records, ensure_ascii=False), index, quiz_id, user_id),
+    )
+
+
 async def get_stats(user_id: int) -> dict[str, Any]:
     """聚合：闯关次数（以完成答题为准）、累计答对题数、平均正确率。"""
     row = await db.fetch_one(
@@ -89,7 +113,10 @@ async def get_stats(user_id: int) -> dict[str, Any]:
 async def list_history(user_id: int, offset: int, limit: int) -> list[dict[str, Any]]:
     return await db.fetch_all(
         """SELECT qs.quiz_id, qs.title, qs.created_at,
-                  ar.accuracy, ar.total_questions
+                  ar.accuracy,
+                  JSON_LENGTH(qs.questions_json) AS total_questions,
+                  COALESCE(JSON_LENGTH(qs.progress_json), 0) AS answered_count,
+                  qs.current_index
            FROM quiz_sessions qs
            LEFT JOIN answer_records ar ON ar.quiz_id = qs.quiz_id
            WHERE qs.user_id = %s

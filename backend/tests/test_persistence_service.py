@@ -112,3 +112,41 @@ async def test_persist_report_zero_correct_no_coins(monkeypatch):
     fake.execute_queue = [(1, 1), (1, 1)]
     await persistence_service.persist_report(7, _report_request(correct=0), _report(accuracy=0))
     assert not any("total_coins" in sql for sql, _ in fake.executed)
+
+
+def _grounded_quiz(quiz_id="quiz_g1"):
+    from app.models.quiz import Source
+
+    return Quiz(
+        quiz_id=quiz_id,
+        title="T",
+        summary="s",
+        interpretation="按 X 领域",
+        source_type="text",
+        user_input="u",
+        questions=[
+            Question(
+                id="q1",
+                type="single",
+                stem="题干",
+                options=[Option(key="A", text="a"), Option(key="B", text="b")],
+                answer=["A"],
+                explanation="讲解",
+                knowledge_point="kp",
+                difficulty="easy",
+            )
+        ],
+        sources=[Source(title="S", url="http://s", score=0.9, kind="search")],
+        grounded=True,
+    )
+
+
+async def test_persist_quiz_writes_grounding_fields(monkeypatch):
+    fake = FakeDB().install(monkeypatch)
+    await persistence_service.persist_quiz(7, _grounded_quiz())
+    sql, args = fake.executed[0]
+    assert "interpretation" in sql and "sources_json" in sql and "grounded" in sql
+    # 新列追加在 questions_json(args[5]) 之后，保持既有索引不变
+    assert args[6] == "按 X 领域"
+    assert json.loads(args[7])[0]["url"] == "http://s"
+    assert args[8] == 1

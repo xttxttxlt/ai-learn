@@ -36,6 +36,25 @@ class Settings(BaseSettings):
     llm_timeout: int = 30
     llm_max_retries: int = 2
 
+    # 联网接地出题（Tavily 搜索 + 网页抽取）
+    # 未配置 tavily_api_key 或 enable_web_search=False 时，出题自动降级为“未接地”链路
+    tavily_api_key: str = ""
+    enable_web_search: bool = True
+    # 摘要检索实例：简单主题，仅返回摘要，结果条数偏多
+    tavily_search_brief_max_results: int = 5
+    # 全文检索实例：复杂主题，结果含正文，条数偏小以控 token
+    tavily_search_full_max_results: int = 3
+    tavily_search_full_depth: str = "advanced"
+    # 网页抽取实例：用户给出 URL 时抓取整页正文
+    tavily_extract_depth: str = "advanced"
+    tavily_extract_format: str = "markdown"
+    # 地区加权（Tavily country，仅 general topic 生效；空=全球）
+    tavily_country: str = ""
+    # Agent 工具循环上限，防止无限检索（每轮“模型→工具”约耗 2 步，16 足够多轮检索+抽取+结构化输出）
+    quiz_agent_recursion_limit: int = 16
+    # 单条检索/抽取正文注入模型前的截断长度，控制 token
+    quiz_digest_max_chars: int = 2000
+
     # MySQL
     mysql_host: str = "localhost"
     mysql_port: int = 3306

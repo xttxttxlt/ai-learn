@@ -190,6 +190,16 @@
   font-size: 26px;
   color: #8a98a5;
 }
+.item__status {
+  flex: none;
+  padding: 8px 20px;
+  border-radius: 999px;
+  background: #fff1e6;
+  border: 2px solid #f5d9c2;
+  color: #cb6227;
+  font-size: 24px;
+  font-weight: 800;
+}
 .empty {
   padding: 48px 32px;
   text-align: center;

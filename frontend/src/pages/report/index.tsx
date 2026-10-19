@@ -3,7 +3,6 @@ import { View, Text } from '@tarojs/components'
 import Taro, { useLoad } from '@tarojs/taro'
 import CoinPill from '@/components/CoinPill'
 import ProgressRing from '@/components/ProgressRing'
-import TabBar from '@/components/TabBar'
 import { generateReport, getQuizDetail } from '@/services/api'
 import { ApiError } from '@/services/request'
 import { getCachedUser, setCachedUser } from '@/services/auth'
@@ -12,7 +11,7 @@ import {
   getAnswerRecords,
   getCurrentQuiz
 } from '@/store'
-import type { Report } from '@/types'
+import type { Report, Source } from '@/types'
 import './index.scss'
 
 export default function ReportPage() {
@@ -25,6 +24,7 @@ export default function ReportPage() {
   // 历史回看模式：从个人中心/首页历史进入，直接读后端详情，不重新生成报告
   const [reviewMode, setReviewMode] = useState(false)
   const [reviewQuizId, setReviewQuizId] = useState('')
+  const [sources, setSources] = useState<Source[]>([])
 
   const loadReview = async (quizId: string) => {
     setLoading(true)
@@ -32,6 +32,7 @@ export default function ReportPage() {
     try {
       const detail = await getQuizDetail(quizId)
       setTopic(detail.title)
+      setSources(detail.sources || [])
       const correct = detail.answer_records.filter(r => r.is_correct).length
       setEarned(correct * COIN_PER_CORRECT)
       setWrongCount(detail.answer_records.length - correct)
@@ -52,6 +53,7 @@ export default function ReportPage() {
     const quiz = getCurrentQuiz()
     const records = getAnswerRecords()
     setTopic(quiz?.title || '本次学习')
+    setSources(quiz?.sources || [])
     const correct = records.filter(r => r.is_correct).length
     setEarned(correct * COIN_PER_CORRECT)
     setWrongCount(records.filter(r => !r.is_correct).length)
@@ -221,6 +223,22 @@ export default function ReportPage() {
         </View>
       )}
 
+      {/* 参考来源（接地时） */}
+      {sources.length > 0 && (
+        <View className='note-card'>
+          <View className='card-h'>
+            <View className='icon icon-share card-h__icon' />
+            <Text className='card-h__title'>参考来源（{sources.length}）</Text>
+          </View>
+          {sources.map((s, i) => (
+            <View className='src-item' key={i} onClick={() => Taro.setClipboardData({ data: s.url })}>
+              <Text className='src-item__title'>{s.title}</Text>
+              <Text className='src-item__url'>{s.url}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       {/* 分享海报（仅预览 UI） */}
       <View className='sticker'>
         <View className='card-h'>
@@ -244,8 +262,6 @@ export default function ReportPage() {
           <Text>生成海报</Text>
         </View>
       </View>
-
-      <TabBar active='profile' />
     </View>
   )
 }

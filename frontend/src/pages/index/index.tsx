@@ -45,7 +45,7 @@ export default function Index() {
       return
     }
     setLoading(true)
-    Taro.showLoading({ title: 'AI 出题中…', mask: true })
+    Taro.showLoading({ title: 'AI 检索出题中…', mask: true })
     try {
       const quiz = await generateQuiz({ user_input: input, question_count: 5 })
       setCurrentQuiz(quiz)
@@ -60,8 +60,13 @@ export default function Index() {
     }
   }
 
-  const openHistory = (quizId: string) => {
-    Taro.navigateTo({ url: `/pages/report/index?quiz_id=${quizId}` })
+  const openHistory = (item: QuizHistoryItem) => {
+    // 已完成 → 回看报告；未完成 → 断点续答
+    if (item.accuracy !== null) {
+      Taro.navigateTo({ url: `/pages/report/index?quiz_id=${item.quiz_id}` })
+    } else {
+      Taro.navigateTo({ url: `/pages/quiz/index?quiz_id=${item.quiz_id}` })
+    }
   }
 
   return (
@@ -98,7 +103,7 @@ export default function Index() {
         <View className='home-actions'>
           <View className={`home-btn ${loading ? 'home-btn--disabled' : ''}`} onClick={onGenerate}>
             <View className='icon icon-arrow-right home-btn__icon' />
-            <Text>{loading ? 'AI 正在出题…' : '开始生成题目'}</Text>
+            <Text>{loading ? 'AI 检索出题中…' : '开始生成题目'}</Text>
           </View>
         </View>
       </View>
@@ -111,7 +116,7 @@ export default function Index() {
         </View>
       ) : (
         history.map(item => (
-          <View className='item' key={item.quiz_id} onClick={() => openHistory(item.quiz_id)}>
+          <View className='item' key={item.quiz_id} onClick={() => openHistory(item)}>
             <View className='item__avatar'>
               <View className='icon icon-book item__avatar-icon' />
             </View>
@@ -119,12 +124,16 @@ export default function Index() {
               <Text className='item__title'>{item.title}</Text>
               <Text className='item__date'>{formatHistoryDate(item.created_at)}</Text>
             </View>
-            {item.accuracy !== null && (
+            {item.accuracy !== null ? (
               <ProgressRing
                 percent={item.accuracy}
                 size='sm'
                 color={item.accuracy >= 50 ? '#ff7a2f' : '#47a4ff'}
               />
+            ) : (
+              <Text className='item__status'>
+                {item.answered_count ? `已答 ${item.answered_count}/${item.question_count ?? ''}` : '未完成'}
+              </Text>
             )}
           </View>
         ))

@@ -1,6 +1,6 @@
 .page {
   min-height: 100vh;
-  padding: 40px 32px 180px;
+  padding: 40px 32px calc(80px + env(safe-area-inset-bottom));
   background: linear-gradient(180deg, #fffaf5 0%, #f6f1e9 100%);
 }
 
@@ -276,4 +276,24 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* 接地：参考来源条目 */
+.src-item {
+  padding: 14px 0;
+  border-top: 2px dashed #f0e2d6;
+}
+.src-item__title {
+  display: block;
+  font-size: 27px;
+  font-weight: 700;
+  color: #4a5866;
+  line-height: 1.45;
+}
+.src-item__url {
+  display: block;
+  margin-top: 4px;
+  font-size: 22px;
+  color: #93a0ac;
+  word-break: break-all;
 }

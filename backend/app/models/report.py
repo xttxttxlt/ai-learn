@@ -10,6 +10,14 @@ class AnswerRecord(BaseModel):
     duration_ms: int = Field(0, ge=0)
 
 
+class QuizProgressSaveRequest(BaseModel):
+    """断点续答进度上报（未完成时前端逐题/切题上报）。"""
+
+    quiz_id: str = Field(..., min_length=1)
+    index: int = Field(0, ge=0, description="断点续答起始题号（0 基）")
+    records: list[AnswerRecord] = Field(default_factory=list, description="已答题记录")
+
+
 class ReportGenerateRequest(BaseModel):
     quiz_id: str = ""
     topic: str = ""

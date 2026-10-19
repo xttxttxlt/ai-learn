@@ -33,6 +33,13 @@ class QuestionSchema(BaseModel):
 class QuizOutputSchema(BaseModel):
     title: str = Field(description="学习主题标题")
     summary: str = Field(description="本次题库的主题摘要")
+    interpretation: str = Field(
+        default="",
+        description=(
+            "本次题库所选定的领域/角度解读。当主题存在多义时，说明依据检索结果锁定了哪一个领域；"
+            "主题明确或未能联网接地时可为空字符串。"
+        ),
+    )
     questions: list[QuestionSchema] = Field(description="题目列表")
 
 

@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { View, Text } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import Taro, { useLoad } from '@tarojs/taro'
 import CoinPill from '@/components/CoinPill'
 import { getCachedUser } from '@/services/auth'
-import { COIN_PER_CORRECT, getCurrentQuiz, setAnswerRecords } from '@/store'
-import type { AnswerRecord, Quiz } from '@/types'
+import { getQuizDetail, saveQuizProgress } from '@/services/api'
+import { COIN_PER_CORRECT, getCurrentQuiz, setCurrentQuiz, setAnswerRecords } from '@/store'
+import type { AnswerRecord, Question, Quiz } from '@/types'
 import './index.scss'
 
 function isCorrect(selected: string[], answer: string[]): boolean {
@@ -13,8 +14,22 @@ function isCorrect(selected: string[], answer: string[]): boolean {
   return s.length === a.length && s.every((v, i) => v === a[i])
 }
 
+const TYPE_LABEL: Record<Question['type'], string> = {
+  single: '单选',
+  multiple: '多选',
+  judge: '判断'
+}
+
+/** 题干中不再展示（单选）（多选）（判断）字样，题型由气泡标识 */
+function stripTypeTag(stem: string): string {
+  return stem
+    .replace(/[（(]\s*(单选|多选|判断)\s*[)）]/g, '')
+    .trim()
+}
+
 export default function QuizPage() {
-  const [quiz] = useState<Quiz | null>(getCurrentQuiz())
+  const [quiz, setQuiz] = useState<Quiz | null>(null)
+  const [loading, setLoading] = useState(true)
   const [idx, setIdx] = useState(0)
   const [records, setRecords] = useState<Record<string, AnswerRecord>>({})
   const [pending, setPending] = useState<string[]>([])
@@ -22,6 +37,53 @@ export default function QuizPage() {
   // 金币基数取服务端缓存的 total_coins，本局答对即时累加（落库以报告接口为准）
   const [coinTotal, setCoinTotal] = useState<number>(getCachedUser()?.total_coins ?? 0)
   const [explainOpen, setExplainOpen] = useState(true)
+  const [sourcesOpen, setSourcesOpen] = useState(false)
+
+  // 支持断点续答：URL 带 quiz_id 时从后端拉题库，并按本地进度恢复题号与已答记录
+  useLoad(options => {
+    const qid = options?.quiz_id
+    if (!qid) {
+      setQuiz(getCurrentQuiz())
+      setLoading(false)
+      return
+    }
+    ;(async () => {
+      try {
+        const detail = await getQuizDetail(qid)
+        const resumed: Quiz = {
+          quiz_id: detail.quiz_id,
+          title: detail.title,
+          summary: detail.summary,
+          sources: detail.sources,
+          grounded: detail.grounded,
+          questions: detail.questions
+        }
+        setCurrentQuiz(resumed)
+        setQuiz(resumed)
+        const progRecords = detail.progress || []
+        if (progRecords.length > 0) {
+          const map: Record<string, AnswerRecord> = {}
+          progRecords.forEach(r => {
+            map[r.question_id] = r
+          })
+          setRecords(map)
+          setIdx(Math.max(0, Math.min(detail.current_index ?? 0, detail.questions.length - 1)))
+        }
+      } catch (e) {
+        setQuiz(null)
+      } finally {
+        setLoading(false)
+      }
+    })()
+  })
+
+  if (loading) {
+    return (
+      <View className='page quiz-empty'>
+        <Text className='quiz-empty__text'>加载中…</Text>
+      </View>
+    )
+  }
 
   if (!quiz || quiz.questions.length === 0) {
     return (
@@ -32,6 +94,15 @@ export default function QuizPage() {
         </View>
       </View>
     )
+  }
+
+  const persistProgress = (nextIdx: number, nextRecords: Record<string, AnswerRecord>) => {
+    // 进度上报后端（fire-and-forget，失败不阻塞答题）
+    saveQuizProgress({
+      quiz_id: quiz.quiz_id,
+      index: nextIdx,
+      records: Object.values(nextRecords)
+    }).catch(() => {})
   }
 
   const total = quiz.questions.length
@@ -47,6 +118,7 @@ export default function QuizPage() {
     setPending([])
     setStartTs(Date.now())
     setExplainOpen(true)
+    persistProgress(next, records)
   }
 
   const submit = (keys: string[]) => {
@@ -61,7 +133,9 @@ export default function QuizPage() {
       is_correct: correct,
       duration_ms: Date.now() - startTs
     }
-    setRecords(prev => ({ ...prev, [q.id]: record }))
+    const nextRecords = { ...records, [q.id]: record }
+    setRecords(nextRecords)
+    persistProgress(idx, nextRecords)
     if (correct) {
       setCoinTotal(prev => prev + COIN_PER_CORRECT)
     }
@@ -83,11 +157,16 @@ export default function QuizPage() {
   const onFinish = () => {
     const list = quiz.questions.map(item => records[item.id]).filter(Boolean) as AnswerRecord[]
     setAnswerRecords(list)
+    setCurrentQuiz(quiz)
     Taro.redirectTo({ url: '/pages/report/index' })
   }
 
   const onNext = () => {
-    if (!submitted) return
+    // 多选题无单独确认按钮：未作答时"继续"即确认作答，作答后再次点击才进入下一题
+    if (!submitted) {
+      if (q.type === 'multiple') submit(pending)
+      return
+    }
     if (isLast) onFinish()
     else goTo(idx + 1)
   }
@@ -105,6 +184,10 @@ export default function QuizPage() {
   }
 
   const progressPct = Math.round(((idx + 1) / total) * 100)
+
+  const copyUrl = (url: string) => {
+    Taro.setClipboardData({ data: url })
+  }
 
   return (
     <View className='page'>
@@ -125,7 +208,10 @@ export default function QuizPage() {
         </View>
       </View>
 
-      <Text className='quiz-title'>{q.stem}</Text>
+      <Text className='quiz-title'>
+        {stripTypeTag(q.stem)}
+        <Text className={`qtype qtype--${q.type}`}>{TYPE_LABEL[q.type]}</Text>
+      </Text>
 
       <View className='options'>
         {q.options.map(opt => (
@@ -140,12 +226,6 @@ export default function QuizPage() {
           </View>
         ))}
       </View>
-
-      {q.type === 'multiple' && !submitted && (
-        <View className='confirm-btn' onClick={() => submit(pending)}>
-          <Text>确认作答（多选）</Text>
-        </View>
-      )}
 
       {submitted && (
         <View className={`result-tip ${rec.is_correct ? 'result-tip--ok' : 'result-tip--bad'}`}>
@@ -172,11 +252,30 @@ export default function QuizPage() {
         </View>
       )}
 
+      {quiz.sources && quiz.sources.length > 0 && (
+        <View className='sources-box'>
+          <View className='sources-head' onClick={() => setSourcesOpen(o => !o)}>
+            <Text className='sources-head__label'>参考来源（{quiz.sources.length}）</Text>
+            <Text className='sources-head__toggle'>{sourcesOpen ? '收起' : '展开'}</Text>
+          </View>
+          {sourcesOpen &&
+            quiz.sources.map((s, i) => (
+              <View className='source-item' key={i} onClick={() => copyUrl(s.url)}>
+                <Text className='source-item__title'>{s.title}</Text>
+                <Text className='source-item__url'>{s.url}</Text>
+              </View>
+            ))}
+        </View>
+      )}
+
       <View className='next'>
         <View className={`prev-btn ${idx === 0 ? 'btn--disabled' : ''}`} onClick={onPrev}>
           <Text>上一题</Text>
         </View>
-        <View className={`next-btn ${!submitted ? 'btn--disabled' : ''}`} onClick={onNext}>
+        <View
+          className={`next-btn ${!submitted && q.type !== 'multiple' ? 'btn--disabled' : ''}`}
+          onClick={onNext}
+        >
           <Text>{isLast ? '查看报告' : '继续'} →</Text>
         </View>
       </View>

@@ -18,10 +18,19 @@ export interface Question {
   difficulty: Difficulty
 }
 
+export interface Source {
+  title: string
+  url: string
+  score?: number | null
+  kind?: 'search' | 'extract' | null
+}
+
 export interface Quiz {
   quiz_id: string
   title: string
   summary: string
+  grounded?: boolean
+  sources?: Source[]
   questions: Question[]
 }
 
@@ -72,6 +81,8 @@ export interface QuizHistoryItem {
   title: string
   accuracy: number | null
   question_count: number | null
+  answered_count?: number
+  current_index?: number
   created_at: string
 }
 
@@ -91,4 +102,8 @@ export interface QuizDetail {
   answer_records: AnswerRecord[]
   report: Report | null
   accuracy: number | null
+  sources?: Source[]
+  grounded?: boolean
+  progress?: AnswerRecord[]
+  current_index?: number
 }

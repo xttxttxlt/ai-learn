@@ -74,3 +74,31 @@ def test_generate_service_error_returns_4001(monkeypatch):
     body = resp.json()
     assert body["code"] == 4001
     assert body["data"] is None
+
+
+def test_generate_includes_grounding_fields(monkeypatch):
+    from app.models.quiz import Source
+
+    def grounded(req):
+        q = _fake_quiz()
+        q.interpretation = "按 AI 智能体工程领域"
+        q.grounded = True
+        q.sources = [Source(title="Faros", url="http://faros", score=0.94, kind="search")]
+        return q
+
+    monkeypatch.setattr(quiz_route, "generate_quiz", grounded)
+    resp = client.post("/api/v1/quiz/generate", json={"user_input": "Harness Engineering"})
+    data = resp.json()["data"]
+    assert data["grounded"] is True
+    assert data["interpretation"] == "按 AI 智能体工程领域"
+    assert data["sources"][0]["url"] == "http://faros"
+
+
+def test_generate_default_grounding_fields(monkeypatch):
+    # 降级态：未接地时 grounded=False、sources=[]、interpretation=""
+    monkeypatch.setattr(quiz_route, "generate_quiz", lambda req: _fake_quiz())
+    resp = client.post("/api/v1/quiz/generate", json={"user_input": "什么是 RAG"})
+    data = resp.json()["data"]
+    assert data["grounded"] is False
+    assert data["sources"] == []
+    assert data["interpretation"] == ""

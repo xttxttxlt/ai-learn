@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -10,6 +10,15 @@ DifficultyFilter = Literal["easy", "medium", "hard", "mixed"]
 class Option(BaseModel):
     key: str = Field(..., description="选项标识，如 A/B/C/D")
     text: str = Field(..., description="选项内容")
+
+
+class Source(BaseModel):
+    """出题接地的参考来源（取自真实检索/网页抽取结果，不可由模型编造）。"""
+
+    title: str = Field(..., description="来源标题")
+    url: str = Field(..., description="来源链接")
+    score: Optional[float] = Field(None, description="检索相关度得分（抽取来源可为空）")
+    kind: Optional[str] = Field(None, description="来源类型：search 检索 / extract 网页抽取")
 
 
 class Question(BaseModel):
@@ -33,6 +42,9 @@ class Quiz(BaseModel):
     quiz_id: str
     title: str
     summary: str
+    interpretation: str = Field("", description="本次出题所选定的领域/角度解读；未接地或主题明确时可为空")
     source_type: str = "text"
     user_input: str
     questions: list[Question]
+    sources: list[Source] = Field(default_factory=list, description="参考来源列表（接地时非空）")
+    grounded: bool = Field(False, description="本次是否成功联网接地")
