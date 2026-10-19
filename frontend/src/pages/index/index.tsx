@@ -4,10 +4,11 @@ import Taro, { useDidShow } from '@tarojs/taro'
 import CoinPill from '@/components/CoinPill'
 import ProgressRing from '@/components/ProgressRing'
 import TabBar from '@/components/TabBar'
-import { generateQuiz } from '@/services/api'
+import { generateQuiz, getProfile, getQuizHistory } from '@/services/api'
 import { ApiError } from '@/services/request'
-import { getCoins, getHistory, setCurrentQuiz } from '@/store'
-import type { HistoryItem } from '@/store'
+import { ensureLogin, getCachedUser, setCachedUser } from '@/services/auth'
+import { formatHistoryDate, setCurrentQuiz } from '@/store'
+import type { QuizHistoryItem, UserProfile } from '@/types'
 import './index.scss'
 
 const PLACEHOLDER =
@@ -16,12 +17,24 @@ const PLACEHOLDER =
 export default function Index() {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
-  const [coins, setCoins] = useState<number>(getCoins())
-  const [history, setHistory] = useState<HistoryItem[]>(getHistory())
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [history, setHistory] = useState<QuizHistoryItem[]>([])
 
-  useDidShow(() => {
-    setCoins(getCoins())
-    setHistory(getHistory())
+  const cached = getCachedUser()
+  const nickname = profile?.nickname || cached?.nickname || '学习者'
+  const coins = profile?.total_coins ?? cached?.total_coins ?? 0
+
+  useDidShow(async () => {
+    const logged = await ensureLogin()
+    if (!logged) return
+    try {
+      const [p, h] = await Promise.all([getProfile(), getQuizHistory(1, 10)])
+      setProfile(p)
+      setCachedUser({ id: p.id, nickname: p.nickname, avatar_url: p.avatar_url, total_coins: p.total_coins })
+      setHistory(h.items)
+    } catch (e) {
+      // 拉取失败不打扰用户，展示缓存/空态
+    }
   })
 
   const onGenerate = async () => {
@@ -47,14 +60,18 @@ export default function Index() {
     }
   }
 
+  const openHistory = (quizId: string) => {
+    Taro.navigateTo({ url: `/pages/report/index?quiz_id=${quizId}` })
+  }
+
   return (
     <View className='page'>
       <View className='toolbar'>
         <View className='hello-user'>
           <View className='hello-avatar'>
-            <Text>小</Text>
+            <Text>{nickname.slice(0, 1)}</Text>
           </View>
-          <Text className='hello-name'>你好，小皮</Text>
+          <Text className='hello-name'>你好，{nickname}</Text>
         </View>
         <CoinPill value={coins} />
       </View>
@@ -94,19 +111,21 @@ export default function Index() {
         </View>
       ) : (
         history.map(item => (
-          <View className='item' key={item.quiz_id}>
+          <View className='item' key={item.quiz_id} onClick={() => openHistory(item.quiz_id)}>
             <View className='item__avatar'>
               <View className='icon icon-book item__avatar-icon' />
             </View>
             <View className='item__body'>
               <Text className='item__title'>{item.title}</Text>
-              <Text className='item__date'>{item.date}</Text>
+              <Text className='item__date'>{formatHistoryDate(item.created_at)}</Text>
             </View>
-            <ProgressRing
-              percent={item.mastery}
-              size='sm'
-              color={item.mastery >= 50 ? '#ff7a2f' : '#47a4ff'}
-            />
+            {item.accuracy !== null && (
+              <ProgressRing
+                percent={item.accuracy}
+                size='sm'
+                color={item.accuracy >= 50 ? '#ff7a2f' : '#47a4ff'}
+              />
+            )}
           </View>
         ))
       )}

@@ -1,5 +1,6 @@
 import Taro from '@tarojs/taro'
 import { API_BASE_URL, REQUEST_TIMEOUT } from './config'
+import { getToken, relogin } from './auth'
 
 export interface ApiEnvelope<T> {
   code: number
@@ -16,30 +17,45 @@ export class ApiError extends Error {
   }
 }
 
+/** 后端业务码：4010 = 未登录或登录已过期 */
+const CODE_UNAUTHORIZED = 4010
+
 interface RequestOptions {
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'PUT'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data?: any
 }
 
-/** 统一请求：自动拼接基址、解包 {code,message,data}，code!==0 抛 ApiError。 */
+async function doRequest<T>(path: string, method: string, data: unknown): Promise<ApiEnvelope<T>> {
+  const token = getToken()
+  const header: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (token) header.Authorization = `Bearer ${token}`
+  const res = await Taro.request<ApiEnvelope<T>>({
+    url: `${API_BASE_URL}${path}`,
+    method: method as keyof Taro.request.Method,
+    data,
+    header,
+    timeout: REQUEST_TIMEOUT
+  })
+  return res.data
+}
+
+/** 统一请求：自动带 token、解包 {code,message,data}，4010 自动重登并重试一次，其余 code!==0 抛 ApiError。 */
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', data } = options
 
-  let res
+  let body: ApiEnvelope<T>
   try {
-    res = await Taro.request<ApiEnvelope<T>>({
-      url: `${API_BASE_URL}${path}`,
-      method,
-      data,
-      header: { 'Content-Type': 'application/json' },
-      timeout: REQUEST_TIMEOUT
-    })
+    body = await doRequest<T>(path, method, data)
+    if (body && body.code === CODE_UNAUTHORIZED && getToken()) {
+      // token 失效：静默重登后重试一次
+      const ok = await relogin()
+      if (ok) body = await doRequest<T>(path, method, data)
+    }
   } catch (e) {
     throw new ApiError(-1, '网络异常，请确认后端服务已启动')
   }
 
-  const body = res.data
   if (!body || typeof body.code !== 'number') {
     throw new ApiError(-1, '响应格式异常')
   }

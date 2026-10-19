@@ -36,6 +36,21 @@ class Settings(BaseSettings):
     llm_timeout: int = 30
     llm_max_retries: int = 2
 
+    # MySQL
+    mysql_host: str = "localhost"
+    mysql_port: int = 3306
+    mysql_user: str = "root"
+    mysql_password: str = ""
+    mysql_database: str = "ai_learn"
+    mysql_charset: str = "utf8mb4"
+    mysql_pool_minsize: int = 1
+    mysql_pool_maxsize: int = 10
+    mysql_auto_init: bool = True
+
+    # JWT
+    jwt_secret: str = "dev-insecure-secret-change-me-in-production-0000"
+    jwt_expire_days: int = 30
+
 
 @lru_cache
 def get_settings() -> Settings:

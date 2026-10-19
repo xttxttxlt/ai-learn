@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { View, Text } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import CoinPill from '@/components/CoinPill'
-import { COIN_PER_CORRECT, addCoins, getCoins, getCurrentQuiz, setAnswerRecords } from '@/store'
+import { getCachedUser } from '@/services/auth'
+import { COIN_PER_CORRECT, getCurrentQuiz, setAnswerRecords } from '@/store'
 import type { AnswerRecord, Quiz } from '@/types'
 import './index.scss'
 
@@ -18,7 +19,8 @@ export default function QuizPage() {
   const [records, setRecords] = useState<Record<string, AnswerRecord>>({})
   const [pending, setPending] = useState<string[]>([])
   const [startTs, setStartTs] = useState(Date.now())
-  const [coinTotal, setCoinTotal] = useState<number>(getCoins())
+  // 金币基数取服务端缓存的 total_coins，本局答对即时累加（落库以报告接口为准）
+  const [coinTotal, setCoinTotal] = useState<number>(getCachedUser()?.total_coins ?? 0)
   const [explainOpen, setExplainOpen] = useState(true)
 
   if (!quiz || quiz.questions.length === 0) {
@@ -61,7 +63,7 @@ export default function QuizPage() {
     }
     setRecords(prev => ({ ...prev, [q.id]: record }))
     if (correct) {
-      setCoinTotal(addCoins(COIN_PER_CORRECT))
+      setCoinTotal(prev => prev + COIN_PER_CORRECT)
     }
   }
 

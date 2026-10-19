@@ -39,6 +39,21 @@ class ContentFilteredError(AppError):
     message = "内容可能包含敏感信息，请调整后重试"
 
 
+class WechatLoginError(AppError):
+    code = 4004
+    message = "微信登录失败，请稍后重试"
+
+
+class UnauthorizedError(AppError):
+    code = 4010
+    message = "未登录或登录已过期，请重新登录"
+
+
+class NotFoundError(AppError):
+    code = 4040
+    message = "记录不存在"
+
+
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     logger.warning("app_error", path=request.url.path, code=exc.code, message=exc.message)
     return JSONResponse(

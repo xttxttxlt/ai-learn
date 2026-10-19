@@ -53,3 +53,42 @@ export interface ReportGenerateParams {
   questions: Question[]
   answer_records: AnswerRecord[]
 }
+
+export interface User {
+  id: number
+  nickname: string
+  avatar_url: string
+  total_coins: number
+}
+
+export interface UserProfile extends User {
+  quiz_count: number
+  correct_count: number
+  average_accuracy: number
+}
+
+export interface QuizHistoryItem {
+  quiz_id: string
+  title: string
+  accuracy: number | null
+  question_count: number | null
+  created_at: string
+}
+
+export interface QuizHistoryList {
+  items: QuizHistoryItem[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface QuizDetail {
+  quiz_id: string
+  title: string
+  summary: string
+  created_at: string
+  questions: Question[]
+  answer_records: AnswerRecord[]
+  report: Report | null
+  accuracy: number | null
+}

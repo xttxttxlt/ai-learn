@@ -1,9 +1,12 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
+from app.core.db import close_db, init_db
 from app.core.exceptions import (
     AppError,
     app_error_handler,
@@ -15,10 +18,19 @@ from app.core.logging import setup_logging
 settings = get_settings()
 setup_logging()
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await init_db()
+    yield
+    await close_db()
+
+
 app = FastAPI(
     title="AI 闯关学习小程序 API",
     version="0.1.0",
     description="输入 -> AI 出题 -> 答题 -> 复盘报告 的 MVP 后端",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

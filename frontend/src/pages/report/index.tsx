@@ -4,14 +4,13 @@ import Taro, { useLoad } from '@tarojs/taro'
 import CoinPill from '@/components/CoinPill'
 import ProgressRing from '@/components/ProgressRing'
 import TabBar from '@/components/TabBar'
-import { generateReport } from '@/services/api'
+import { generateReport, getQuizDetail } from '@/services/api'
 import { ApiError } from '@/services/request'
+import { getCachedUser, setCachedUser } from '@/services/auth'
 import {
   COIN_PER_CORRECT,
-  formatDate,
   getAnswerRecords,
-  getCurrentQuiz,
-  pushHistory
+  getCurrentQuiz
 } from '@/store'
 import type { Report } from '@/types'
 import './index.scss'
@@ -23,12 +22,38 @@ export default function ReportPage() {
   const [topic, setTopic] = useState('本次学习')
   const [earned, setEarned] = useState(0)
   const [wrongCount, setWrongCount] = useState(0)
+  // 历史回看模式：从个人中心/首页历史进入，直接读后端详情，不重新生成报告
+  const [reviewMode, setReviewMode] = useState(false)
+  const [reviewQuizId, setReviewQuizId] = useState('')
+
+  const loadReview = async (quizId: string) => {
+    setLoading(true)
+    setError('')
+    try {
+      const detail = await getQuizDetail(quizId)
+      setTopic(detail.title)
+      const correct = detail.answer_records.filter(r => r.is_correct).length
+      setEarned(correct * COIN_PER_CORRECT)
+      setWrongCount(detail.answer_records.length - correct)
+      if (!detail.report) {
+        setError('这次闯关还没有生成报告')
+        setReport(null)
+      } else {
+        setReport(detail.report)
+      }
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '历史记录加载失败')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const load = async () => {
     const quiz = getCurrentQuiz()
     const records = getAnswerRecords()
     setTopic(quiz?.title || '本次学习')
-    setEarned(records.filter(r => r.is_correct).length * COIN_PER_CORRECT)
+    const correct = records.filter(r => r.is_correct).length
+    setEarned(correct * COIN_PER_CORRECT)
     setWrongCount(records.filter(r => !r.is_correct).length)
 
     if (!quiz || records.length === 0) {
@@ -46,7 +71,11 @@ export default function ReportPage() {
         answer_records: records
       })
       setReport(r)
-      pushHistory({ quiz_id: quiz.quiz_id, title: quiz.title, date: formatDate(), mastery: r.accuracy })
+      // 服务端已按答对数累加金币，同步更新本地缓存
+      const user = getCachedUser()
+      if (user) {
+        setCachedUser({ ...user, total_coins: user.total_coins + correct * COIN_PER_CORRECT })
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '报告生成失败，请重试')
     } finally {
@@ -54,15 +83,22 @@ export default function ReportPage() {
     }
   }
 
-  useLoad(() => {
-    load()
+  useLoad(options => {
+    const quizId = options?.quiz_id
+    if (quizId) {
+      setReviewMode(true)
+      setReviewQuizId(quizId)
+      loadReview(quizId)
+    } else {
+      load()
+    }
   })
 
   if (loading) {
     return (
       <View className='page state'>
         <View className='state__spinner' />
-        <Text className='state__text'>AI 正在生成复盘报告…</Text>
+        <Text className='state__text'>{reviewMode ? '正在加载历史记录…' : 'AI 正在生成复盘报告…'}</Text>
       </View>
     )
   }
@@ -71,9 +107,16 @@ export default function ReportPage() {
     return (
       <View className='page state'>
         <Text className='state__text'>{error || '报告加载失败'}</Text>
-        <View className='state__btn' onClick={load}>
-          <Text>重试</Text>
-        </View>
+        {!reviewMode && (
+          <View className='state__btn' onClick={load}>
+            <Text>重试</Text>
+          </View>
+        )}
+        {reviewMode && reviewQuizId && (
+          <View className='state__btn' onClick={() => loadReview(reviewQuizId)}>
+            <Text>重试</Text>
+          </View>
+        )}
         <View className='state__btn state__btn--ghost' onClick={() => Taro.reLaunch({ url: '/pages/index/index' })}>
           <Text>返回首页</Text>
         </View>
