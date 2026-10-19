@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-flash"
 
+    # 微信小程序（AppID 相对公开；AppSecret 为服务端密钥，仅后端持有，绝不下发到前端）
+    wechat_appid: str = ""
+    wechat_appsecret: str = ""
+
     # 出题链路参数（非 thinking 模式）
     quiz_temperature: float = 0.4
     quiz_max_tokens: int = 4096
