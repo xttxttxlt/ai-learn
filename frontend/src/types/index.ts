@@ -40,6 +40,24 @@ export interface QuizGenerateParams {
   difficulty?: DifficultyFilter
 }
 
+export type QuizJobStatus = 'pending' | 'running' | 'completed' | 'failed'
+
+export interface QuizJobCreateParams extends QuizGenerateParams {
+  request_id: string
+}
+
+export interface QuizJobCreated {
+  job_id: string
+  status: QuizJobStatus
+}
+
+export interface QuizJob {
+  job_id: string
+  status: QuizJobStatus
+  quiz?: Quiz | null
+  error?: string | null
+}
+
 export interface AnswerRecord {
   question_id: string
   selected_answers: string[]

@@ -1,8 +1,9 @@
 import { request } from './request'
 import type {
   AnswerRecord,
-  Quiz,
-  QuizGenerateParams,
+  QuizJob,
+  QuizJobCreated,
+  QuizJobCreateParams,
   Report,
   ReportGenerateParams,
   UserProfile,
@@ -10,8 +11,12 @@ import type {
   QuizDetail
 } from '@/types'
 
-export function generateQuiz(params: QuizGenerateParams) {
-  return request<Quiz>('/api/v1/quiz/generate', { method: 'POST', data: params })
+export function createQuizJob(params: QuizJobCreateParams) {
+  return request<QuizJobCreated>('/api/v1/quiz/jobs', { method: 'POST', data: params })
+}
+
+export function getQuizJob(jobId: string) {
+  return request<QuizJob>(`/api/v1/quiz/jobs/${jobId}`)
 }
 
 export function saveQuizProgress(params: { quiz_id: string; index: number; records: AnswerRecord[] }) {

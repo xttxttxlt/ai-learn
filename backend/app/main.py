@@ -14,6 +14,7 @@ from app.core.exceptions import (
     validation_error_handler,
 )
 from app.core.logging import setup_logging
+from app.services import quiz_job_service
 
 settings = get_settings()
 setup_logging()
@@ -22,6 +23,7 @@ setup_logging()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await init_db()
+    await quiz_job_service.cleanup_on_startup()
     yield
     await close_db()
 

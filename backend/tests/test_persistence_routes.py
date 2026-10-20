@@ -1,4 +1,7 @@
-"""quiz/report 路由的可选鉴权 + 落库触发测试（不动现有 test_quiz_api / test_report_api）。"""
+"""quiz/report 路由的鉴权与落库触发测试。
+
+出题落库已迁入异步任务执行器，由 test_quiz_job_service 覆盖；本文件保留报告与进度接口的用例。
+"""
 
 from fastapi.testclient import TestClient
 
@@ -38,44 +41,6 @@ def _fake_quiz():
 
 def _fake_report():
     return Report(accuracy=100, three_line_summary=["x"], share_quote="y")
-
-
-def test_quiz_generate_with_token_persists(monkeypatch):
-    calls = []
-    monkeypatch.setattr(quiz_route, "generate_quiz", lambda req: _fake_quiz())
-
-    async def fake_persist(user_id, quiz):
-        calls.append((user_id, quiz.quiz_id))
-
-    monkeypatch.setattr(quiz_route.persistence_service, "persist_quiz", fake_persist)
-    resp = client.post(
-        "/api/v1/quiz/generate", json={"user_input": "什么是 RAG"}, headers=HEADERS
-    )
-    assert resp.json()["code"] == 0
-    assert calls == [(7, "quiz_t1")]
-
-
-def test_quiz_generate_anonymous_skips_persist(monkeypatch):
-    calls = []
-    monkeypatch.setattr(quiz_route, "generate_quiz", lambda req: _fake_quiz())
-
-    async def fake_persist(user_id, quiz):
-        calls.append(user_id)
-
-    monkeypatch.setattr(quiz_route.persistence_service, "persist_quiz", fake_persist)
-    resp = client.post("/api/v1/quiz/generate", json={"user_input": "什么是 RAG"})
-    assert resp.json()["code"] == 0
-    assert calls == []
-
-
-def test_quiz_generate_bad_token_still_works_anonymously(monkeypatch):
-    monkeypatch.setattr(quiz_route, "generate_quiz", lambda req: _fake_quiz())
-    resp = client.post(
-        "/api/v1/quiz/generate",
-        json={"user_input": "什么是 RAG"},
-        headers={"Authorization": "Bearer invalid-token"},
-    )
-    assert resp.json()["code"] == 0
 
 
 def test_report_generate_with_token_persists(monkeypatch):

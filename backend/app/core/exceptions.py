@@ -54,6 +54,11 @@ class NotFoundError(AppError):
     message = "记录不存在"
 
 
+class ServiceUnavailableError(AppError):
+    code = 5001
+    message = "服务暂时不可用，请稍后重试"
+
+
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     logger.warning("app_error", path=request.url.path, code=exc.code, message=exc.message)
     return JSONResponse(

@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     quiz_agent_recursion_limit: int = 16
     # 单条检索/抽取正文注入模型前的截断长度，控制 token
     quiz_digest_max_chars: int = 2000
+    # 异步出题任务：超时兜底秒数与进程内并发上限（单实例部署）
+    quiz_job_timeout_seconds: int = 300
+    quiz_job_max_concurrency: int = 2
 
     # MySQL
     mysql_host: str = "localhost"

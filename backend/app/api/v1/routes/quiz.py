@@ -1,37 +1,27 @@
 from fastapi import APIRouter, Depends
-from fastapi.concurrency import run_in_threadpool
 
-from app.core.auth import AuthUser, get_current_user, get_optional_user
+from app.core.auth import AuthUser, get_current_user
 from app.models.common import ok
-from app.models.quiz import QuizGenerateRequest
+from app.models.quiz_job import QuizJobCreateRequest
 from app.models.report import QuizProgressSaveRequest
 from app.repositories import quiz_repository
-from app.services import persistence_service
-from app.services.quiz_service import generate_quiz
+from app.services import quiz_job_service
 
 router = APIRouter(prefix="/quiz", tags=["quiz"])
 
 
-@router.post("/generate")
-async def generate(
-    req: QuizGenerateRequest,
-    auth: AuthUser | None = Depends(get_optional_user),
+@router.post("/jobs")
+async def create_job(
+    req: QuizJobCreateRequest, auth: AuthUser = Depends(get_current_user)
 ) -> dict:
-    # LLM 调用是同步阻塞的，放入线程池，行为与原同步路由一致
-    quiz = await run_in_threadpool(generate_quiz, req)
-    if auth is not None:
-        await persistence_service.persist_quiz(auth.user_id, quiz)
-    return ok(
-        {
-            "quiz_id": quiz.quiz_id,
-            "title": quiz.title,
-            "summary": quiz.summary,
-            "interpretation": quiz.interpretation,
-            "grounded": quiz.grounded,
-            "sources": [s.model_dump() for s in quiz.sources],
-            "questions": [q.model_dump() for q in quiz.questions],
-        }
-    )
+    created = await quiz_job_service.create_job(auth.user_id, req)
+    return ok(created.model_dump())
+
+
+@router.get("/jobs/{job_id}")
+async def get_job(job_id: str, auth: AuthUser = Depends(get_current_user)) -> dict:
+    job = await quiz_job_service.get_job(auth.user_id, job_id)
+    return ok(job.model_dump())
 
 
 @router.post("/progress")
