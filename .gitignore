@@ -16,6 +16,8 @@ venv/
 .ruff_cache/
 .coverage
 htmlcov/
+backend/data/
+backend/logs/
 
 # ===== Node / Taro =====
 node_modules/

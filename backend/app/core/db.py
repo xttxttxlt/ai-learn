@@ -42,6 +42,8 @@ async def _run_schema_init() -> None:
     )
     try:
         async with conn.cursor() as cur:
+            # 幂等 DDL 在对象已存在时会产生 Note；只在本初始化连接屏蔽，避免启动日志噪声
+            await cur.execute("SET sql_notes = 0")
             for stmt in statements:
                 await cur.execute(stmt)
     finally:

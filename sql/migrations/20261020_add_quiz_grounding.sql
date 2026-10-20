@@ -8,7 +8,7 @@ USE `ai_learn`;
 ALTER TABLE quiz_sessions
     ADD COLUMN interpretation TEXT NULL COMMENT '本次出题所选定的领域/角度解读；主题多义时说明按哪个领域出题，未接地或主题明确时可为空' AFTER questions_json,
     ADD COLUMN sources_json JSON NULL COMMENT '参考来源JSON数组，每项含 title/url/score/kind，取自真实联网检索或网页抽取结果' AFTER interpretation,
-    ADD COLUMN grounded TINYINT(1) NOT NULL DEFAULT 0 COMMENT '本次是否成功联网接地出题：1=是，0=否' AFTER sources_json;
+    ADD COLUMN grounded TINYINT NOT NULL DEFAULT 0 COMMENT '本次是否成功联网接地出题：1=是，0=否' AFTER sources_json;
 
 -- ROLLBACK（如需撤销，取消注释执行）：
 -- ALTER TABLE quiz_sessions

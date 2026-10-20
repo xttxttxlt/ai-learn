@@ -44,6 +44,21 @@ class WechatLoginError(AppError):
     message = "微信登录失败，请稍后重试"
 
 
+class KnowledgeBaseError(AppError):
+    code = 4005
+    message = "知识库操作失败，请稍后重试"
+
+
+class DocumentProcessingError(AppError):
+    code = 4006
+    message = "文档处理失败，请稍后重试"
+
+
+class KnowledgeBaseUnavailableError(AppError):
+    code = 4007
+    message = "知识库服务未配置或不可用，请检查 Embedding 配置"
+
+
 class UnauthorizedError(AppError):
     code = 4010
     message = "未登录或登录已过期，请重新登录"

@@ -1,6 +1,8 @@
-import { request } from './request'
+import { request, uploadFile } from './request'
 import type {
   AnswerRecord,
+  KnowledgeBaseOverview,
+  KnowledgeDocument,
   QuizJob,
   QuizJobCreated,
   QuizJobCreateParams,
@@ -41,4 +43,19 @@ export function getQuizHistory(page = 1, pageSize = 10) {
 
 export function getQuizDetail(quizId: string) {
   return request<QuizDetail>(`/api/v1/user/quizzes/${quizId}`)
+}
+
+export function getKnowledgeBase() {
+  return request<KnowledgeBaseOverview>('/api/v1/knowledge-base')
+}
+
+export function uploadKnowledgeDocument(filePath: string, fileName: string) {
+  // 小程序 uploadFile 会用临时路径作为文件名，额外用表单字段传真实文件名
+  return uploadFile<KnowledgeDocument>('/api/v1/knowledge-base/documents', filePath, fileName, {
+    file_name: fileName
+  })
+}
+
+export function deleteKnowledgeDocument(docId: string) {
+  return request<null>(`/api/v1/knowledge-base/documents/${docId}`, { method: 'DELETE' })
 }

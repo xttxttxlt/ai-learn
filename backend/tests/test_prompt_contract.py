@@ -6,6 +6,7 @@ from app.prompts.quiz_prompt import (
     QUIZ_PROMPT_V1,
     QUIZ_V2_SCHEMA_EXAMPLE,
     RESEARCH_PROMPT_V2,
+    RESEARCH_PROMPT_WITH_KB,
     SCHEMA_EXAMPLE,
     format_research_user_message,
 )
@@ -83,6 +84,27 @@ def test_v2_schema_example_is_valid_json():
 def test_research_user_message_formatter():
     msg = format_research_user_message("什么是 Harness Engineering")
     assert "Harness Engineering" in msg
+
+
+def test_research_prompt_with_kb_contract():
+    assert isinstance(RESEARCH_PROMPT_WITH_KB, str)
+    for token in (
+        "search_knowledge_base",
+        "web_search_brief",
+        "web_search_full",
+        "web_extract",
+    ):
+        assert token in RESEARCH_PROMPT_WITH_KB
+    assert "个人知识库" in RESEARCH_PROMPT_WITH_KB
+    assert "当前文档" in RESEARCH_PROMPT_WITH_KB
+    assert "不得编造" in RESEARCH_PROMPT_WITH_KB
+    assert "10 次" in RESEARCH_PROMPT_WITH_KB
+    assert "联网" in RESEARCH_PROMPT_WITH_KB
+
+
+def test_grounded_prompt_mentions_knowledge_base_sources():
+    assert "个人知识库" in QUIZ_GROUNDED_PROMPT.messages[0].prompt.template
+    assert "个人知识库" in QUIZ_GROUNDED_PROMPT.messages[1].prompt.template
 
 
 def test_quiz_output_schema_interpretation_optional():

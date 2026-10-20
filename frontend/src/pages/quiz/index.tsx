@@ -5,6 +5,7 @@ import CoinPill from '@/components/CoinPill'
 import { getCachedUser } from '@/services/auth'
 import { getQuizDetail, saveQuizProgress } from '@/services/api'
 import { COIN_PER_CORRECT, getCurrentQuiz, setCurrentQuiz, setAnswerRecords } from '@/store'
+import { isKnowledgeBaseSource, knowledgeBaseMeta } from '@/utils/source'
 import type { AnswerRecord, Question, Quiz } from '@/types'
 import './index.scss'
 
@@ -259,12 +260,32 @@ export default function QuizPage() {
             <Text className='sources-head__toggle'>{sourcesOpen ? '收起' : '展开'}</Text>
           </View>
           {sourcesOpen &&
-            quiz.sources.map((s, i) => (
-              <View className='source-item' key={i} onClick={() => copyUrl(s.url)}>
-                <Text className='source-item__title'>{s.title}</Text>
-                <Text className='source-item__url'>{s.url}</Text>
-              </View>
-            ))}
+            quiz.sources.map((s, i) => {
+              const kb = isKnowledgeBaseSource(s)
+              const meta = kb ? knowledgeBaseMeta(s) : ''
+              return (
+                <View
+                  className={`source-item ${kb ? 'source-item--kb' : ''}`}
+                  key={`${s.kind || 'web'}-${s.doc_id || ''}-${s.chunk_index ?? i}`}
+                  onClick={() => {
+                    if (!kb && s.url) copyUrl(s.url)
+                  }}
+                >
+                  <View className='source-item__head'>
+                    {kb && <Text className='source-item__badge'>知识库</Text>}
+                    <Text className='source-item__title'>{s.title}</Text>
+                  </View>
+                  {kb ? (
+                    <>
+                      {meta && <Text className='source-item__meta'>{meta}</Text>}
+                      {s.snippet && <Text className='source-item__snippet'>{s.snippet}</Text>}
+                    </>
+                  ) : (
+                    <Text className='source-item__url'>{s.url}</Text>
+                  )}
+                </View>
+              )
+            })}
         </View>
       )}
 

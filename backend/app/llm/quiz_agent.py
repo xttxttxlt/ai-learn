@@ -16,24 +16,50 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import ToolCallLimitMiddleware
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.tools import BaseTool
 
+from app.core.config import get_settings
 from app.llm.search_tools import build_search_tools
 from app.prompts.quiz_prompt import RESEARCH_PROMPT_V2
 
 # 抽取来源工具名 -> 来源类型
 _EXTRACT_TOOL_NAME = "web_extract"
+_KB_TOOL_NAME = "search_knowledge_base"
+
+_KIND_RANK = {"knowledge_base": 0, "extract": 1, "search": 2}
 
 
-def build_research_agent(llm: Any, tools: Optional[list[BaseTool]] = None) -> Any:
-    """构建研究 Agent。tools 为 None 时用默认三接地工具（web_search_brief/full、web_extract）。
+def build_research_agent(
+    llm: Any,
+    tools: Optional[list[BaseTool]] = None,
+    system_prompt: str = RESEARCH_PROMPT_V2,
+    tool_call_limit: Optional[int] = None,
+) -> Any:
+    """构建研究 Agent。tools 为 None 时用默认三联网工具；system_prompt 默认保持 V2。
 
-    recursion_limit 等在 invoke 时通过 config 传入，不在此固化。
+    工具调用达到上限后会收到错误提示，迫使模型停止检索、用已有结果输出简报，
+    避免大文档场景因持续检索耗尽 recursion_limit 而整单失败。
     """
     if tools is None:
         tools = build_search_tools()
-    return create_agent(model=llm, tools=tools, system_prompt=RESEARCH_PROMPT_V2)
+    limit = (
+        tool_call_limit
+        if tool_call_limit is not None
+        else get_settings().quiz_agent_tool_call_limit
+    )
+    middleware = []
+    if limit > 0:
+        middleware.append(
+            ToolCallLimitMiddleware(run_limit=limit, exit_behavior="continue")
+        )
+    return create_agent(
+        model=llm,
+        tools=tools,
+        system_prompt=system_prompt,
+        middleware=middleware,
+    )
 
 
 def extract_research_text(messages: Any, max_chars: int = 6000) -> str:
@@ -51,38 +77,80 @@ def extract_research_text(messages: Any, max_chars: int = 6000) -> str:
 
 
 def extract_sources_from_messages(
-    messages: Any, max_sources: int = 6
+    messages: Any, max_sources: int = 8
 ) -> list[dict[str, Any]]:
     """从 Agent 消息列表抽取参考来源。
 
-    仅信任工具 artifact 中的结果：web_extract 归为 kind="extract"，其余搜索工具归为 kind="search"。
-    按 url 去重；排序时抽取来源优先、搜索来源按 score 降序；截断前 max_sources 条。
+    仅信任工具 artifact 中的结果：知识库检索归为 kind="knowledge_base"，
+    web_extract 归为 kind="extract"，其余搜索工具归为 kind="search"。
+    联网按 URL 去重，知识库按 (doc_id, chunk_index) 去重；
+    排序为知识库优先、其次网页抽取、最后联网搜索，组内按 score 降序。
     """
     if not messages:
         return []
-    collected: dict[str, dict[str, Any]] = {}
+    collected: list[dict[str, Any]] = []
+    seen_web: set[str] = set()
+    seen_kb: set[tuple[str, int]] = set()
+
     for msg in messages:
         if not isinstance(msg, ToolMessage):
             continue
         artifact = getattr(msg, "artifact", None)
         if not isinstance(artifact, dict):
             continue
-        kind = "extract" if getattr(msg, "name", None) == _EXTRACT_TOOL_NAME else "search"
+        name = getattr(msg, "name", None)
+
+        if name == _KB_TOOL_NAME:
+            for item in artifact.get("results") or []:
+                if not isinstance(item, dict):
+                    continue
+                doc_id = item.get("doc_id")
+                if not doc_id:
+                    continue
+                try:
+                    chunk_index = int(item.get("chunk_index") or 0)
+                except (TypeError, ValueError):
+                    chunk_index = 0
+                key = (str(doc_id), chunk_index)
+                if key in seen_kb:
+                    continue
+                seen_kb.add(key)
+                page = item.get("page")
+                collected.append(
+                    {
+                        "title": item.get("doc_name") or str(doc_id),
+                        "url": "",
+                        "score": item.get("score"),
+                        "kind": "knowledge_base",
+                        "doc_id": str(doc_id),
+                        "chunk_index": chunk_index,
+                        "page": page if isinstance(page, int) else None,
+                        "snippet": item.get("snippet"),
+                    }
+                )
+            continue
+
+        kind = "extract" if name == _EXTRACT_TOOL_NAME else "search"
         for item in artifact.get("results") or []:
             if not isinstance(item, dict):
                 continue
             url = item.get("url")
-            if not url or url in collected:
+            if not url or url in seen_web:
                 continue
-            collected[url] = {
-                "title": item.get("title") or url,
-                "url": url,
-                "score": item.get("score"),
-                "kind": kind,
-            }
+            seen_web.add(url)
+            collected.append(
+                {
+                    "title": item.get("title") or url,
+                    "url": url,
+                    "score": item.get("score"),
+                    "kind": kind,
+                }
+            )
 
-    sources = list(collected.values())
-    sources.sort(
-        key=lambda s: (0 if s["kind"] == "extract" else 1, -(s["score"] or 0.0)),
+    collected.sort(
+        key=lambda s: (
+            _KIND_RANK.get(s.get("kind"), 3),
+            -(s.get("score") or 0.0),
+        )
     )
-    return sources[:max_sources]
+    return collected[:max_sources]

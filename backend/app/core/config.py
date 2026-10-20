@@ -50,13 +50,33 @@ class Settings(BaseSettings):
     tavily_extract_format: str = "markdown"
     # 地区加权（Tavily country，仅 general topic 生效；空=全球）
     tavily_country: str = ""
-    # Agent 工具循环上限，防止无限检索（每轮“模型→工具”约耗 2 步，16 足够多轮检索+抽取+结构化输出）
-    quiz_agent_recursion_limit: int = 16
+    # Agent 单次运行最多执行的工具调用次数；达到后拦截多余调用，让模型用已有结果收尾
+    quiz_agent_tool_call_limit: int = 10
+    # Agent 图执行步数上限，需高于“工具调用上限 + 模型收尾”所需步数
+    quiz_agent_recursion_limit: int = 30
     # 单条检索/抽取正文注入模型前的截断长度，控制 token
     quiz_digest_max_chars: int = 2000
     # 异步出题任务：超时兜底秒数与进程内并发上限（单实例部署）
     quiz_job_timeout_seconds: int = 300
     quiz_job_max_concurrency: int = 2
+
+    # 个人知识库（百炼 Embedding + 本地 Chroma）
+    enable_knowledge_base: bool = True
+    dashscope_api_key: str = ""
+    embedding_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    embedding_model: str = "text-embedding-v4"
+    embedding_dimensions: int = 1024
+    embedding_batch_size: int = 8
+    embedding_timeout: int = 30
+    embedding_max_retries: int = 2
+    chroma_persist_dir: str = "data/chroma"
+    kb_upload_dir: str = "data/knowledge_base"
+    kb_max_file_mb: int = 10
+    kb_chunk_size: int = 800
+    kb_chunk_overlap: int = 100
+    kb_max_chunks_per_doc: int = 2000
+    kb_retrieval_top_k: int = 4
+    kb_ingestion_concurrency: int = 2
 
     # MySQL
     mysql_host: str = "localhost"
@@ -72,6 +92,27 @@ class Settings(BaseSettings):
     # JWT
     jwt_secret: str = "dev-insecure-secret-change-me-in-production-0000"
     jwt_expire_days: int = 30
+
+    @property
+    def chroma_persist_path(self) -> Path:
+        return _resolve_backend_path(self.chroma_persist_dir)
+
+    @property
+    def kb_upload_path(self) -> Path:
+        return _resolve_backend_path(self.kb_upload_dir)
+
+    @property
+    def kb_max_file_bytes(self) -> int:
+        return self.kb_max_file_mb * 1024 * 1024
+
+    @property
+    def knowledge_base_ready(self) -> bool:
+        return bool(self.enable_knowledge_base and self.dashscope_api_key)
+
+
+def _resolve_backend_path(value: str) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else BASE_DIR / path
 
 
 @lru_cache

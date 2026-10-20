@@ -292,8 +292,25 @@
   padding-top: 14px;
   border-top: 2px dashed #f0e2d4;
 }
+.source-item__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.source-item__badge {
+  flex: none;
+  padding: 2px 12px;
+  border-radius: 10px;
+  border: 2px solid #a8ddc3;
+  background: #eff9f3;
+  color: #29986d;
+  font-size: 20px;
+  font-weight: 800;
+}
 .source-item__title {
   display: block;
+  flex: 1;
+  min-width: 0;
   font-size: 26px;
   font-weight: 700;
   color: #33424d;
@@ -305,4 +322,17 @@
   font-size: 22px;
   color: #8a97a3;
   word-break: break-all;
+}
+.source-item__meta {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+  color: #8a97a3;
+}
+.source-item__snippet {
+  display: block;
+  margin-top: 6px;
+  font-size: 23px;
+  line-height: 1.55;
+  color: #5b6670;
 }

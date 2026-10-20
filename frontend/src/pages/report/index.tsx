@@ -11,6 +11,7 @@ import {
   getAnswerRecords,
   getCurrentQuiz
 } from '@/store'
+import { isKnowledgeBaseSource, knowledgeBaseMeta } from '@/utils/source'
 import type { Report, Source } from '@/types'
 import './index.scss'
 
@@ -230,12 +231,32 @@ export default function ReportPage() {
             <View className='icon icon-share card-h__icon' />
             <Text className='card-h__title'>参考来源（{sources.length}）</Text>
           </View>
-          {sources.map((s, i) => (
-            <View className='src-item' key={i} onClick={() => Taro.setClipboardData({ data: s.url })}>
-              <Text className='src-item__title'>{s.title}</Text>
-              <Text className='src-item__url'>{s.url}</Text>
-            </View>
-          ))}
+          {sources.map((s, i) => {
+            const kb = isKnowledgeBaseSource(s)
+            const meta = kb ? knowledgeBaseMeta(s) : ''
+            return (
+              <View
+                className={`src-item ${kb ? 'src-item--kb' : ''}`}
+                key={`${s.kind || 'web'}-${s.doc_id || ''}-${s.chunk_index ?? i}`}
+                onClick={() => {
+                  if (!kb && s.url) Taro.setClipboardData({ data: s.url })
+                }}
+              >
+                <View className='src-item__head'>
+                  {kb && <Text className='src-item__badge'>知识库</Text>}
+                  <Text className='src-item__title'>{s.title}</Text>
+                </View>
+                {kb ? (
+                  <>
+                    {meta && <Text className='src-item__meta'>{meta}</Text>}
+                    {s.snippet && <Text className='src-item__snippet'>{s.snippet}</Text>}
+                  </>
+                ) : (
+                  <Text className='src-item__url'>{s.url}</Text>
+                )}
+              </View>
+            )
+          })}
         </View>
       )}
 

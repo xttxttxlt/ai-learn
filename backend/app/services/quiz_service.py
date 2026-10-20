@@ -4,6 +4,7 @@ from app.core.config import get_settings
 from app.core.exceptions import QuizGenerationError, ValidationError
 from app.core.logging import get_logger
 from app.llm.langchain_factory import build_chat_model
+from app.llm.knowledge_base import KnowledgeScope, build_knowledge_base_tool
 from app.llm.quiz_agent import (
     build_research_agent,
     extract_research_text,
@@ -12,7 +13,11 @@ from app.llm.quiz_agent import (
 from app.llm.quiz_chain import build_grounded_chain, build_quiz_chain
 from app.llm.search_tools import build_search_tools
 from app.models.quiz import Option, Question, Quiz, QuizGenerateRequest, Source
-from app.prompts.quiz_prompt import format_research_user_message
+from app.prompts.quiz_prompt import (
+    RESEARCH_PROMPT_V2,
+    RESEARCH_PROMPT_WITH_KB,
+    format_research_user_message,
+)
 from app.utils.content_filter import assert_safe
 from app.utils.id_generator import generate_quiz_id
 from app.utils.text_cleaner import clean_user_input
@@ -25,6 +30,9 @@ _DIFFICULTY_INSTRUCTIONS = {
     "hard": "偏难，重点考察细节、边界与易错点。",
     "mixed": "难易混合，覆盖基础概念到进阶应用。",
 }
+
+DOCUMENT_UNAVAILABLE_MESSAGE = "文档内容不可用，请重新上传"
+DOCUMENT_QUIZ_FAILED_MESSAGE = "文档出题失败，请稍后重试"
 
 
 def _grounding_enabled(settings) -> bool:
@@ -198,18 +206,146 @@ def _generate_plain(
     raise QuizGenerationError()
 
 
+def _has_scoped_kb_source(quiz: Quiz, scope: KnowledgeScope) -> bool:
+    scope_ids = set(scope.document_ids)
+    return any(
+        source.kind == "knowledge_base" and source.doc_id in scope_ids
+        for source in quiz.sources
+    )
+
+
+def _generate_document_quiz(
+    request: QuizGenerateRequest,
+    cleaned: str,
+    settings,
+    difficulty_instruction: str,
+    scope: KnowledgeScope,
+    agent: Optional[Any],
+    grounded_chain: Optional[Any],
+    kb_tool: Optional[Any],
+) -> Quiz:
+    """文档一键闯关：仅提供知识库工具，不联网；无文档来源即失败。"""
+    if kb_tool is None:
+        try:
+            kb_tool = build_knowledge_base_tool(scope, settings)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("knowledge_tool_build_failed", error=str(exc))
+            raise QuizGenerationError(DOCUMENT_UNAVAILABLE_MESSAGE) from exc
+
+    if agent is None:
+        llm = build_chat_model(settings.quiz_temperature, settings.quiz_max_tokens)
+        agent = build_research_agent(
+            llm, [kb_tool], system_prompt=RESEARCH_PROMPT_WITH_KB
+        )
+
+    try:
+        quiz = _generate_grounded(
+            request,
+            cleaned,
+            settings,
+            difficulty_instruction,
+            agent=agent,
+            grounded_chain=grounded_chain,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("document_quiz_failed", error=str(exc))
+        raise QuizGenerationError(DOCUMENT_QUIZ_FAILED_MESSAGE) from exc
+
+    if not _has_scoped_kb_source(quiz, scope):
+        logger.warning("document_quiz_without_kb_source")
+        raise QuizGenerationError(DOCUMENT_UNAVAILABLE_MESSAGE)
+    return quiz
+
+
+def _generate_home_quiz_with_knowledge(
+    request: QuizGenerateRequest,
+    cleaned: str,
+    settings,
+    difficulty_instruction: str,
+    scope: KnowledgeScope,
+    chain: Optional[Any],
+    agent: Optional[Any],
+    grounded_chain: Optional[Any],
+    kb_tool: Optional[Any],
+) -> Quiz:
+    """首页出题：知识库 + 联网自主路由；失败依次降级到仅联网、未接地。"""
+    tools: list[Any] = []
+    if kb_tool is None:
+        try:
+            kb_tool = build_knowledge_base_tool(scope, settings)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("knowledge_tool_build_failed", error=str(exc))
+            kb_tool = None
+    if kb_tool is not None:
+        tools.append(kb_tool)
+    if _grounding_enabled(settings):
+        tools.extend(build_search_tools(settings))
+
+    if not tools:
+        return _generate_plain(
+            request, cleaned, settings, difficulty_instruction, chain=chain
+        )
+
+    grounded_agent = agent
+    if grounded_agent is None:
+        llm = build_chat_model(settings.quiz_temperature, settings.quiz_max_tokens)
+        grounded_agent = build_research_agent(
+            llm, tools, system_prompt=RESEARCH_PROMPT_WITH_KB
+        )
+
+    try:
+        return _generate_grounded(
+            request,
+            cleaned,
+            settings,
+            difficulty_instruction,
+            agent=grounded_agent,
+            grounded_chain=grounded_chain,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("knowledge_quiz_fallback", error=str(exc))
+
+    # 注入 agent 的场景（测试或调用方自带 Agent）不再重建联网 Agent。
+    if agent is None and _grounding_enabled(settings):
+        try:
+            web_agent = build_research_agent(
+                build_chat_model(settings.quiz_temperature, settings.quiz_max_tokens),
+                build_search_tools(settings),
+                system_prompt=RESEARCH_PROMPT_V2,
+            )
+            return _generate_grounded(
+                request,
+                cleaned,
+                settings,
+                difficulty_instruction,
+                agent=web_agent,
+                grounded_chain=grounded_chain,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("web_quiz_fallback", error=str(exc))
+
+    return _generate_plain(
+        request, cleaned, settings, difficulty_instruction, chain=chain
+    )
+
+
 def generate_quiz(
     request: QuizGenerateRequest,
     chain: Optional[Any] = None,
     agent: Optional[Any] = None,
     grounded_chain: Optional[Any] = None,
+    knowledge_scope: Optional[KnowledgeScope] = None,
+    kb_tool: Optional[Any] = None,
 ) -> Quiz:
-    """出题主流程：清洗 -> 敏感词 -> 优先联网接地 -> 失败降级到未接地链。
+    """出题主流程：清洗 -> 敏感词 -> 优先接地 -> 失败降级到未接地链。
 
     chain / agent / grounded_chain 均可注入（用于测试）：
     - 注入 chain：走未接地 v1 路径；
     - 注入 agent（+可选 grounded_chain）：走两阶段接地路径（失败再降级到 chain/真实 v1 链）；
     - 都不注入：按配置 enable_web_search + tavily_api_key 决定是否接地。
+    knowledge_scope 非空时启用个人知识库：
+    - document_ids 非空：文档一键闯关，仅知识库工具、不联网、无来源即失败；
+    - document_ids 为空：首页出题，知识库 + 联网自主路由，失败逐级降级。
     """
     cleaned = clean_user_input(request.user_input)
     if not cleaned:
@@ -220,6 +356,30 @@ def generate_quiz(
     difficulty_instruction = _DIFFICULTY_INSTRUCTIONS.get(
         request.difficulty, _DIFFICULTY_INSTRUCTIONS["mixed"]
     )
+
+    if knowledge_scope is not None:
+        if knowledge_scope.is_document_scope:
+            return _generate_document_quiz(
+                request,
+                cleaned,
+                settings,
+                difficulty_instruction,
+                knowledge_scope,
+                agent,
+                grounded_chain,
+                kb_tool,
+            )
+        return _generate_home_quiz_with_knowledge(
+            request,
+            cleaned,
+            settings,
+            difficulty_instruction,
+            knowledge_scope,
+            chain,
+            agent,
+            grounded_chain,
+            kb_tool,
+        )
 
     use_grounding = (agent is not None) or (chain is None and _grounding_enabled(settings))
     if use_grounding:

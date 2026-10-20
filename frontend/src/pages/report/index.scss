@@ -283,8 +283,25 @@
   padding: 14px 0;
   border-top: 2px dashed #f0e2d6;
 }
+.src-item__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.src-item__badge {
+  flex: none;
+  padding: 2px 12px;
+  border-radius: 10px;
+  border: 2px solid #a8ddc3;
+  background: #eff9f3;
+  color: #29986d;
+  font-size: 20px;
+  font-weight: 800;
+}
 .src-item__title {
   display: block;
+  flex: 1;
+  min-width: 0;
   font-size: 27px;
   font-weight: 700;
   color: #4a5866;
@@ -296,4 +313,17 @@
   font-size: 22px;
   color: #93a0ac;
   word-break: break-all;
+}
+.src-item__meta {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+  color: #93a0ac;
+}
+.src-item__snippet {
+  display: block;
+  margin-top: 6px;
+  font-size: 23px;
+  line-height: 1.55;
+  color: #5b6670;
 }

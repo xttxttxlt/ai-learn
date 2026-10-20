@@ -22,7 +22,38 @@ export interface Source {
   title: string
   url: string
   score?: number | null
-  kind?: 'search' | 'extract' | null
+  kind?: 'search' | 'extract' | 'knowledge_base' | null
+  doc_id?: string | null
+  chunk_index?: number | null
+  page?: number | null
+  snippet?: string | null
+}
+
+export type KnowledgeDocumentStatus = 'pending' | 'processing' | 'ready' | 'failed'
+
+export interface KnowledgeDocument {
+  doc_id: string
+  file_name: string
+  file_ext: string
+  file_size: number
+  status: KnowledgeDocumentStatus
+  chunk_count: number
+  error_message?: string | null
+  created_at: string
+  finished_at?: string | null
+}
+
+export interface KnowledgeBaseStats {
+  total_documents: number
+  ready_documents: number
+  processing_documents: number
+  failed_documents: number
+  total_chunks: number
+}
+
+export interface KnowledgeBaseOverview {
+  stats: KnowledgeBaseStats
+  documents: KnowledgeDocument[]
 }
 
 export interface Quiz {
@@ -38,6 +69,7 @@ export interface QuizGenerateParams {
   user_input: string
   question_count?: number
   difficulty?: DifficultyFilter
+  document_ids?: string[]
 }
 
 export type QuizJobStatus = 'pending' | 'running' | 'completed' | 'failed'

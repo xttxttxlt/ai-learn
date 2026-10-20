@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS quiz_sessions (
     questions_json JSON NOT NULL COMMENT '题目列表JSON，含题型/题干/选项/正确答案/解析/知识点/难度',
     interpretation TEXT NULL COMMENT '本次出题所选定的领域/角度解读；主题多义时说明按哪个领域出题，未接地或主题明确时可为空',
     sources_json JSON NULL COMMENT '参考来源JSON数组，每项含 title/url/score/kind，取自真实联网检索或网页抽取结果',
-    grounded TINYINT(1) NOT NULL DEFAULT 0 COMMENT '本次是否成功联网接地出题：1=是，0=否',
+    grounded TINYINT NOT NULL DEFAULT 0 COMMENT '本次是否成功联网接地出题：1=是，0=否',
     progress_json JSON NULL COMMENT '答题进度JSON数组（未完成时的已答记录），用于断点续答',
     current_index INT NOT NULL DEFAULT 0 COMMENT '断点续答起始题号（0基）',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -104,3 +104,27 @@ CREATE TABLE IF NOT EXISTS quiz_jobs (
         ON DELETE CASCADE
         ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='出题任务表';
+
+CREATE TABLE IF NOT EXISTS knowledge_documents (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '文档ID，自增主键',
+    doc_id VARCHAR(64) NOT NULL COMMENT '文档业务ID（后端生成的 doc_xxx，全局唯一）',
+    user_id BIGINT UNSIGNED NOT NULL COMMENT '所属用户ID，关联 users.id',
+    file_name VARCHAR(255) NOT NULL COMMENT '上传时的原始文件名（仅保留文件名部分）',
+    file_ext VARCHAR(16) NOT NULL COMMENT '文件扩展名（pdf/docx/md/txt）',
+    file_size BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '文件大小（字节）',
+    file_path VARCHAR(1000) NOT NULL DEFAULT '' COMMENT '本地保存路径',
+    status VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT '处理状态：pending=排队中，processing=处理中，ready=已就绪，failed=失败',
+    chunk_count INT NOT NULL DEFAULT 0 COMMENT '知识片段数量（建库完成后写入）',
+    error_message VARCHAR(500) NULL COMMENT '失败时的可读错误摘要，不存异常堆栈',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
+    finished_at DATETIME NULL COMMENT '处理进入终态（ready/failed）的时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_knowledge_documents_doc_id (doc_id),
+    KEY idx_knowledge_documents_user_status (user_id, status),
+    KEY idx_knowledge_documents_user_created (user_id, created_at),
+    CONSTRAINT fk_knowledge_documents_user_id
+        FOREIGN KEY (user_id) REFERENCES users (id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='个人知识库文档表';

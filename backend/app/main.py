@@ -13,17 +13,25 @@ from app.core.exceptions import (
     unhandled_error_handler,
     validation_error_handler,
 )
-from app.core.logging import setup_logging
-from app.services import quiz_job_service
+from app.core.logging import LOG_FILE, get_logger, setup_logging
+from app.services import knowledge_ingestion_service, quiz_job_service
 
 settings = get_settings()
 setup_logging()
+logger = get_logger("app")
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await init_db()
     await quiz_job_service.cleanup_on_startup()
+    await knowledge_ingestion_service.cleanup_on_startup()
+    logger.info(
+        "app_startup_complete",
+        log_file=str(LOG_FILE),
+        knowledge_base_ready=settings.knowledge_base_ready,
+        kb_max_chunks_per_doc=settings.kb_max_chunks_per_doc,
+    )
     yield
     await close_db()
 

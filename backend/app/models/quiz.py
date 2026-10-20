@@ -13,12 +13,18 @@ class Option(BaseModel):
 
 
 class Source(BaseModel):
-    """出题接地的参考来源（取自真实检索/网页抽取结果，不可由模型编造）。"""
+    """出题接地的参考来源（取自真实检索/网页抽取/知识库分块，不可由模型编造）。"""
 
-    title: str = Field(..., description="来源标题")
-    url: str = Field(..., description="来源链接")
+    title: str = Field(..., description="来源标题；知识库来源为文档名")
+    url: str = Field("", description="来源链接；知识库来源为空")
     score: Optional[float] = Field(None, description="检索相关度得分（抽取来源可为空）")
-    kind: Optional[str] = Field(None, description="来源类型：search 检索 / extract 网页抽取")
+    kind: Optional[str] = Field(
+        None, description="来源类型：search 检索 / extract 网页抽取 / knowledge_base 知识库"
+    )
+    doc_id: Optional[str] = Field(None, description="知识库文档业务ID")
+    chunk_index: Optional[int] = Field(None, description="知识库分块序号")
+    page: Optional[int] = Field(None, description="PDF 出处页码（1 基）")
+    snippet: Optional[str] = Field(None, description="知识库分块摘要")
 
 
 class Question(BaseModel):
@@ -36,6 +42,11 @@ class QuizGenerateRequest(BaseModel):
     user_input: str = Field(..., min_length=1, max_length=4000, description="用户想学习的内容")
     question_count: int = Field(5, ge=3, le=10, description="题目数量，默认 5")
     difficulty: DifficultyFilter = Field("mixed", description="难度筛选")
+    document_ids: list[str] = Field(
+        default_factory=list,
+        max_length=10,
+        description="文档范围（知识库文档业务ID）；为空表示首页全库/Agent 自主路由模式",
+    )
 
 
 class Quiz(BaseModel):
