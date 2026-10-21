@@ -1,0 +1,31 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-learn-backend:latest
+    container_name: ai-learn-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      APP_ENV: production
+      # 复用宿主机上已发布的 MySQL 端口；不要用本机开发时的 117.72.205.123:13306
+      MYSQL_HOST: host.docker.internal
+      MYSQL_PORT: "3306"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ai_learn_data:/app/backend/data
+      - ai_learn_logs:/app/backend/logs
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  ai_learn_data:
+  ai_learn_logs:

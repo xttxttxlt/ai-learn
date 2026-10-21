@@ -1,0 +1,48 @@
+# 版本控制 / IDE / 系统文件
+.git/
+.gitignore
+.idea/
+.vscode/
+.qoder/
+.DS_Store
+Thumbs.db
+
+# 与后端运行无关的目录
+frontend/
+prototypes/
+docs/
+openspec/
+deploy/
+README.md
+README_EN.md
+start-*.bat
+docker-compose.yml
+
+# Python 虚拟环境与缓存
+backend/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+.coverage
+htmlcov/
+
+# 测试代码
+backend/tests/
+backend/pytest.ini
+
+# 运行时数据与日志（镜像内重新生成）
+backend/data/
+backend/logs/
+**/*.log
+
+# 敏感配置：Compose 通过 env_file 注入，不打包进镜像
+backend/.env
+backend/.env.example
+**/.env
+**/*.local
+
+# Docker 自身
+Dockerfile
+.dockerignore
