@@ -27,14 +27,15 @@ vim backend/.env
 
 知识库和题目配图再填写 `DASHSCOPE_API_KEY`、`COS_*`。
 
-本机开发用的 `.env` 里是 `MYSQL_HOST=117.72.205.123`、`MYSQL_PORT=13306`，
-这是从外网连服务器 MySQL 的地址。容器内不要用这组值，
-`docker-compose.yml` 已覆盖为：
+本机开发用的 `backend/.env` 可能填写外网 MySQL 地址，该文件已被 Git 忽略，
+不会提交到仓库。容器内由 `docker-compose.yml` 覆盖为 MySQL 容器名：
 
 ```yaml
-MYSQL_HOST: host.docker.internal
+MYSQL_HOST: mysql
 MYSQL_PORT: "3306"
 ```
+
+需要先把 MySQL 容器接入 Compose 网络，见第 5 节。
 
 ## 2. 构建并启动
 
@@ -79,12 +80,27 @@ curl http://127.0.0.1:8000/api/v1/health
 
 ## 5. MySQL 连接
 
-Compose 通过 `host.docker.internal:3306` 访问宿主机上已发布的 MySQL 端口。
-如果容器内连接失败，按顺序尝试：
+Compose 通过容器名 `mysql` 访问现有 MySQL，因此需要先把 MySQL 容器接入
+Compose 网络（只需执行一次）：
 
-1. `MYSQL_HOST=172.17.0.1`（Docker 默认网桥网关）。
-2. `MYSQL_HOST=<MySQL 容器 IP>`，端口 `3306`（容器重建后 IP 可能变化）。
-3. `MYSQL_HOST=117.72.205.123`、`MYSQL_PORT=13306`（外网入口，可能受 NAT 回环影响）。
+```bash
+docker network ls | grep ai-learn
+docker network connect ai-learn_default mysql
+```
+
+如果网络名不是 `ai-learn_default`，使用上一条命令输出里的实际名称。
+MySQL 容器重建后，需要重新执行 `docker network connect`。
+
+然后重启后端：
+
+```bash
+docker compose up -d --force-recreate
+docker compose logs --tail=100 backend | grep -E "mysql_pool_ready|mysql_init_failed"
+```
+
+如果不想接入 Compose 网络，也可以把 `docker-compose.yml` 里的
+`MYSQL_HOST` 改成 `host.docker.internal`，并恢复 `extra_hosts`；
+具体地址只写在 `backend/.env`，不要提交到仓库。
 
 `MYSQL_AUTO_INIT=true` 会在启动时执行 `sql/init_mysql.sql`。建表语句都是
 `IF NOT EXISTS`，不会删除现有数据。如果数据库账号没有建库权限，改成 `false`，
@@ -113,7 +129,7 @@ docker run --rm -v ai_learn_data:/data -v "$PWD":/backup alpine \
 
 前端 API 地址由 Taro 环境文件控制：
 
-- `.env.development`：开发/联调地址，当前为 `http://117.72.205.123:8000`
+- `.env.development`：开发/联调地址，默认 `http://127.0.0.1:8000`
 - `.env.production`：生产地址，上线前替换成真实 HTTPS 域名
 
 `npm run dev:weapp` 读取 development，`npm run build:weapp` 读取 production。
@@ -124,7 +140,7 @@ docker run --rm -v ai_learn_data:/data -v "$PWD":/backup alpine \
 把 443 反向代理到 `127.0.0.1:8000`，并在微信公众平台配置
 request/uploadFile/downloadFile 合法域名。中国大陆服务器还需要域名备案。
 
-## 8. 更新版本
+## 9. 更新版本
 
 ```bash
 cd /opt/ai-learn

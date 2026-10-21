@@ -31,7 +31,7 @@
 ## 6. 数据模型、持久化与历史详情
 
 - [x] 6.1 在 `backend/app/models/quiz.py` 的 `Quiz` 增加 `interpretation: str=""`、`sources: list[Source]=[]`、`grounded: bool=False`，新增 `Source{title,url,score?,kind?}` 模型；`backend/app/models/user.py` 的 `QuizDetail` 增加同名字段；验证模型可序列化。
-- [x] 6.2 新增 DB 迁移脚本：`ALTER TABLE quiz_sessions ADD COLUMN interpretation TEXT NULL / sources_json JSON NULL / grounded TINYINT(1) NOT NULL DEFAULT 0`（每列加中文 COMMENT），并同步更新 `sql/init_mysql.sql`；已在远端 MySQL（117.72.205.123/ai_learn）执行迁移并 SHOW COLUMNS 验证通过、旧数据兼容（新列默认 NULL/0）。
+- [x] 6.2 新增 DB 迁移脚本：`ALTER TABLE quiz_sessions ADD COLUMN interpretation TEXT NULL / sources_json JSON NULL / grounded TINYINT(1) NOT NULL DEFAULT 0`（每列加中文 COMMENT），并同步更新 `sql/init_mysql.sql`；已在远端 MySQL 的 ai_learn 库执行迁移并 SHOW COLUMNS 验证通过、旧数据兼容（新列默认 NULL/0）。
 - [x] 6.3 `backend/app/repositories/quiz_repository.py` 的 `insert_quiz_session` 增参；`persistence_service.persist_quiz` 落 interpretation/sources/grounded；`history_service.get_detail` 回填这些字段到 `QuizDetail`；用 db/mock 测试验证存取一致。
 
 ## 7. API 响应扩展

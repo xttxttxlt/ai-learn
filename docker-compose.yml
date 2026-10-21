@@ -10,11 +10,9 @@ services:
       - ./backend/.env
     environment:
       APP_ENV: production
-      # 复用宿主机上已发布的 MySQL 端口；不要用本机开发时的 117.72.205.123:13306
-      MYSQL_HOST: host.docker.internal
+      # MySQL 容器需先接入本 Compose 网络，见 deploy/README.md
+      MYSQL_HOST: mysql
       MYSQL_PORT: "3306"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     ports:
       - "8000:8000"
     volumes:
