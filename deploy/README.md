@@ -130,7 +130,7 @@ docker run --rm -v ai_learn_data:/data -v "$PWD":/backup alpine \
 前端 API 地址由 Taro 环境文件控制：
 
 - `.env.development`：开发/联调地址，默认 `http://127.0.0.1:8000`
-- `.env.production`：生产地址，上线前替换成真实 HTTPS 域名
+- `.env.production`：生产构建地址，本地文件，已被 Git 忽略；构建生产包前确认它存在，正式发布时填写 HTTPS 域名
 
 `npm run dev:weapp` 读取 development，`npm run build:weapp` 读取 production。
 
