@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { View, Text } from '@tarojs/components'
+import { Button, Input, Text, View } from '@tarojs/components'
 import Taro, { useDidShow } from '@tarojs/taro'
 import CoinPill from '@/components/CoinPill'
 import ProgressRing from '@/components/ProgressRing'
 import TabBar from '@/components/TabBar'
-import { getProfile, getQuizHistory, updateProfile } from '@/services/api'
+import UserAvatar from '@/components/UserAvatar'
+import { getProfile, getQuizHistory, updateProfile, uploadAvatar } from '@/services/api'
 import { ensureLogin, setCachedUser } from '@/services/auth'
+import { ApiError } from '@/services/request'
 import { formatHistoryDate } from '@/store'
 import type { QuizHistoryItem, UserProfile } from '@/types'
 import './index.scss'
@@ -16,6 +18,15 @@ export default function Profile() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [history, setHistory] = useState<QuizHistoryItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const [editingNickname, setEditingNickname] = useState(false)
+  const [nicknameDraft, setNicknameDraft] = useState('')
+  const [nicknameSaving, setNicknameSaving] = useState(false)
+
+  const applyProfile = (p: UserProfile) => {
+    setProfile(p)
+    setCachedUser({ id: p.id, nickname: p.nickname, avatar_url: p.avatar_url, total_coins: p.total_coins })
+  }
 
   const refresh = async () => {
     const logged = await ensureLogin()
@@ -25,8 +36,7 @@ export default function Profile() {
     }
     try {
       const [p, h] = await Promise.all([getProfile(), getQuizHistory(1, 20)])
-      setProfile(p)
-      setCachedUser({ id: p.id, nickname: p.nickname, avatar_url: p.avatar_url, total_coins: p.total_coins })
+      applyProfile(p)
       setHistory(h.items)
     } catch (e) {
       // 静默失败，展示空态
@@ -39,28 +49,78 @@ export default function Profile() {
     refresh()
   })
 
-  const onEditNickname = async () => {
-    // editable/placeholderText 是微信扩展字段，Taro 4.3 类型定义未收录
-    const res = (await Taro.showModal({
-      title: '修改昵称',
-      editable: true,
-      placeholderText: '输入新昵称（1-20 字）',
-      confirmText: '保存',
-      cancelText: '取消'
-    } as unknown as Taro.showModal.Option)) as { confirm: boolean; content?: string }
-    if (!res.confirm) return
-    const nickname = (res.content || '').trim()
+  const uploadSelectedAvatar = async (tempPath: string) => {
+    if (!tempPath || avatarUploading) return
+    setAvatarUploading(true)
+    try {
+      const p = await uploadAvatar(tempPath)
+      applyProfile(p)
+      Taro.showToast({ title: '头像已更新', icon: 'success' })
+    } catch (e) {
+      const message = e instanceof ApiError ? e.message : '头像上传失败，请重试'
+      Taro.showToast({ title: message, icon: 'none', duration: 2500 })
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
+
+  const onChooseAvatar = (event: { detail?: { avatarUrl?: string } }) => {
+    const tempPath = event.detail?.avatarUrl
+    if (tempPath) {
+      void uploadSelectedAvatar(tempPath)
+    }
+  }
+
+  const onAvatarTap = async () => {
+    // chooseAvatar 仅微信小程序生效；H5 用相册/拍照入口走同一上传流程
+    if (process.env.TARO_ENV === 'weapp' || avatarUploading) return
+    try {
+      const res = await Taro.chooseImage({
+        count: 1,
+        sizeType: ['compressed'],
+        sourceType: ['album', 'camera']
+      })
+      const tempPath = res.tempFilePaths?.[0]
+      if (tempPath) {
+        await uploadSelectedAvatar(tempPath)
+      }
+    } catch (e) {
+      // 用户取消选择
+    }
+  }
+
+  const startEditNickname = () => {
+    setNicknameDraft(profile?.nickname || '')
+    setEditingNickname(true)
+  }
+
+  const cancelEditNickname = () => {
+    setEditingNickname(false)
+    setNicknameDraft('')
+  }
+
+  const saveNickname = async () => {
+    if (nicknameSaving) return
+    const nickname = nicknameDraft.trim()
     if (!nickname || nickname.length > 20) {
       Taro.showToast({ title: '昵称需为 1-20 字', icon: 'none' })
       return
     }
+    if (nickname === profile?.nickname) {
+      setEditingNickname(false)
+      return
+    }
+    setNicknameSaving(true)
     try {
       const p = await updateProfile({ nickname })
-      setProfile(p)
-      setCachedUser({ id: p.id, nickname: p.nickname, avatar_url: p.avatar_url, total_coins: p.total_coins })
+      applyProfile(p)
+      setEditingNickname(false)
       Taro.showToast({ title: '昵称已更新', icon: 'success' })
     } catch (e) {
-      Taro.showToast({ title: '修改失败，请重试', icon: 'none' })
+      const message = e instanceof ApiError ? e.message : '修改失败，请重试'
+      Taro.showToast({ title: message, icon: 'none', duration: 2500 })
+    } finally {
+      setNicknameSaving(false)
     }
   }
 
@@ -79,16 +139,59 @@ export default function Profile() {
     <View className='page'>
       {/* 用户卡片 */}
       <View className='user-card'>
-        <View className='user-card__avatar'>
-          <Text>{nickname.slice(0, 1)}</Text>
-        </View>
-        <View className='user-card__info'>
-          <View className='user-card__name-row' onClick={onEditNickname}>
-            <Text className='user-card__name'>{nickname}</Text>
-            <View className='user-card__edit'>
-              <Text>修改</Text>
+        <Button
+          className='user-card__avatar'
+          openType='chooseAvatar'
+          hoverClass='none'
+          disabled={avatarUploading}
+          onChooseAvatar={onChooseAvatar}
+          onClick={onAvatarTap}
+        >
+          <UserAvatar
+            src={profile?.avatar_url || ''}
+            name={nickname}
+            className='user-card__avatar-inner'
+          />
+          {avatarUploading && (
+            <View className='user-card__avatar-mask'>
+              <Text>上传中</Text>
             </View>
-          </View>
+          )}
+        </Button>
+        <View className='user-card__info'>
+          {editingNickname ? (
+            <View className='user-card__name-edit'>
+              <Input
+                className='user-card__name-input'
+                type='nickname'
+                value={nicknameDraft}
+                maxlength={20}
+                focus
+                placeholder='输入昵称'
+                onInput={e => setNicknameDraft(e.detail.value)}
+                onConfirm={saveNickname}
+              />
+              <View
+                className={`nickname-action ${nicknameSaving ? 'nickname-action--disabled' : ''}`}
+                onClick={saveNickname}
+              >
+                <Text>保存</Text>
+              </View>
+              <View
+                className='nickname-action nickname-action--ghost'
+                onClick={cancelEditNickname}
+              >
+                <Text>取消</Text>
+              </View>
+            </View>
+          ) : (
+            <View className='user-card__name-row' onClick={startEditNickname}>
+              <Text className='user-card__name'>{nickname}</Text>
+              <View className='user-card__edit'>
+                <Text>修改</Text>
+              </View>
+            </View>
+          )}
           <Text className='user-card__slogan'>{SLOGAN}</Text>
         </View>
         <CoinPill value={profile?.total_coins ?? 0} />

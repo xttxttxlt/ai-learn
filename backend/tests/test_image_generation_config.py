@@ -44,6 +44,41 @@ def test_image_generation_defaults():
     assert settings.cos_bucket == ""
     assert settings.cos_public_base_url == ""
     assert settings.cos_key_prefix == "question-images"
+    assert settings.cos_avatar_prefix == "avatars"
+    assert settings.avatar_max_file_mb == 2
+    assert settings.avatar_max_file_bytes == 2 * 1024 * 1024
+
+
+def test_cos_ready_requires_all_four_credentials():
+    ready = Settings(
+        _env_file=None,
+        cos_secret_id="id",
+        cos_secret_key="key",
+        cos_region="ap-guangzhou",
+        cos_bucket="bucket-1250000000",
+    )
+    assert ready.cos_ready is True
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"cos_secret_id": ""},
+        {"cos_secret_key": ""},
+        {"cos_region": ""},
+        {"cos_bucket": ""},
+    ],
+)
+def test_cos_ready_false_when_any_credential_missing(overrides):
+    values = {
+        "cos_secret_id": "id",
+        "cos_secret_key": "key",
+        "cos_region": "ap-guangzhou",
+        "cos_bucket": "bucket-1250000000",
+    }
+    values.update(overrides)
+
+    assert Settings(_env_file=None, **values).cos_ready is False
 
 
 def test_image_generation_ready_requires_all_credentials():

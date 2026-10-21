@@ -26,6 +26,7 @@ from app.models.knowledge_document import (
     KnowledgeDocumentOut,
 )
 from app.repositories import knowledge_document_repository
+from app.utils.time_utils import beijing_now
 from app.services.knowledge_ingestion_service import schedule_ingestion
 from app.utils.id_generator import generate_doc_id
 
@@ -206,7 +207,7 @@ async def upload_document(
         file_size=total_bytes,
         status="pending",
         chunk_count=0,
-        created_at=_fmt_time(datetime.now()),
+        created_at=_fmt_time(beijing_now()),
     )
 
 

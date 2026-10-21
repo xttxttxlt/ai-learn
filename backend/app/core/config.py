@@ -96,6 +96,9 @@ class Settings(BaseSettings):
     cos_bucket: str = ""
     cos_public_base_url: str = ""
     cos_key_prefix: str = "question-images"
+    # 用户头像：COS 公有读对象前缀与上传大小上限
+    cos_avatar_prefix: str = "avatars"
+    avatar_max_file_mb: int = 2
 
     # MySQL
     mysql_host: str = "localhost"
@@ -107,6 +110,8 @@ class Settings(BaseSettings):
     mysql_pool_minsize: int = 1
     mysql_pool_maxsize: int = 10
     mysql_auto_init: bool = True
+    # 连接会话时区；现有历史数据不回填，仅保证新写入时间为北京时间
+    mysql_time_zone: str = "+08:00"
 
     # JWT
     jwt_secret: str = "dev-insecure-secret-change-me-in-production-0000"
@@ -129,14 +134,24 @@ class Settings(BaseSettings):
         return bool(self.enable_knowledge_base and self.dashscope_api_key)
 
     @property
+    def avatar_max_file_bytes(self) -> int:
+        return self.avatar_max_file_mb * 1024 * 1024
+
+    @property
+    def cos_ready(self) -> bool:
+        return bool(
+            self.cos_secret_id
+            and self.cos_secret_key
+            and self.cos_region
+            and self.cos_bucket
+        )
+
+    @property
     def image_generation_ready(self) -> bool:
         return bool(
             self.enable_image_generation
             and self.dashscope_api_key
-            and self.cos_secret_id
-            and self.cos_secret_key
-            and self.cos_region
-            and self.cos_bucket
+            and self.cos_ready
         )
 
 

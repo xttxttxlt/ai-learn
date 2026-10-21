@@ -1,10 +1,13 @@
 """腾讯云 COS 图片上传：公有读桶、固定 URL。"""
 
-from datetime import date
+import uuid
+from datetime import date, datetime
+from typing import Optional
 from urllib.parse import quote
 
 from app.core.config import Settings
 from app.core.logging import get_logger
+from app.utils.time_utils import beijing_now
 
 logger = get_logger("cos_storage_service")
 
@@ -33,6 +36,18 @@ def build_object_key(
     return f"{prefix}/{user_id}/{usage_date:%Y%m%d}/{safe_quiz_id}/q{question_index + 1}.png"
 
 
+def build_avatar_object_key(
+    user_id: int,
+    ext: str,
+    prefix: str = "avatars",
+    now: Optional[datetime] = None,
+) -> str:
+    prefix = (prefix or "avatars").strip("/")
+    safe_ext = (ext or "jpg").strip().lower().lstrip(".")
+    moment = now or beijing_now()
+    return f"{prefix}/{user_id}/{moment:%Y%m%d}/{uuid.uuid4().hex}.{safe_ext}"
+
+
 def build_public_url(key: str, settings: Settings) -> str:
     base = settings.cos_public_base_url.strip()
     if not base:
@@ -42,18 +57,25 @@ def build_public_url(key: str, settings: Settings) -> str:
     return f"{base.rstrip('/')}/{quote(key, safe='/')}"
 
 
-def upload_image(data: bytes, key: str, settings: Settings) -> str:
-    """上传图片字节；失败只记日志并返回空字符串，由调用方按单题降级。"""
+def upload_bytes(
+    data: bytes, key: str, settings: Settings, content_type: str = "image/png"
+) -> str:
+    """上传字节；失败只记日志并返回空字符串，由调用方决定降级方式。"""
     try:
         client = _create_client(settings)
         client.put_object(
             Bucket=settings.cos_bucket,
             Body=data,
             Key=key,
-            ContentType="image/png",
+            ContentType=content_type,
             ACL="public-read",
         )
         return build_public_url(key, settings)
     except Exception as exc:  # noqa: BLE001
         logger.warning("cos_upload_failed", key=key, error=str(exc))
         return ""
+
+
+def upload_image(data: bytes, key: str, settings: Settings) -> str:
+    """题目配图固定为 PNG。"""
+    return upload_bytes(data, key, settings, "image/png")

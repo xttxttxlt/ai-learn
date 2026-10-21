@@ -8,8 +8,9 @@ from app.core.auth import create_token
 from app.core.config import get_settings
 from app.core.exceptions import NotFoundError, WechatLoginError
 from app.core.logging import get_logger
-from app.models.user import LoginResponse, ProfileOut, UserOut
-from app.repositories import quiz_repository, user_repository
+from app.models.user import ImageQuotaOut, LoginResponse, ProfileOut, UserOut
+from app.repositories import image_usage_repository, quiz_repository, user_repository
+from app.utils.time_utils import beijing_today
 
 logger = get_logger("user_service")
 
@@ -65,11 +66,33 @@ async def login(code: str) -> LoginResponse:
     return LoginResponse(token=token, user=_user_out(row))
 
 
+def _image_quota_out(
+    usage_date, used: int, limit: int, available: bool
+) -> ImageQuotaOut:
+    return ImageQuotaOut(
+        usage_date=usage_date.isoformat(),
+        used=used,
+        limit=limit,
+        remaining=max(0, limit - used),
+        available=available,
+    )
+
+
 async def get_profile(user_id: int) -> ProfileOut:
     row = await user_repository.get_by_id(user_id)
     if row is None:
         raise NotFoundError("用户不存在")
     stats = await quiz_repository.get_stats(user_id)
+
+    limit = get_settings().image_daily_limit
+    usage_date = beijing_today()
+    try:
+        used = await image_usage_repository.get_count(user_id, usage_date)
+        quota = _image_quota_out(usage_date, used, limit, available=True)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("image_quota_read_failed", user_id=user_id, error=str(exc))
+        quota = _image_quota_out(usage_date, 0, limit, available=False)
+
     return ProfileOut(
         id=int(row["id"]),
         nickname=row["nickname"],
@@ -78,6 +101,7 @@ async def get_profile(user_id: int) -> ProfileOut:
         quiz_count=stats["quiz_count"],
         correct_count=stats["correct_count"],
         average_accuracy=stats["average_accuracy"],
+        image_quota=quota,
     )
 
 

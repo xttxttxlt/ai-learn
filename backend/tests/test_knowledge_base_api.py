@@ -117,8 +117,11 @@ def test_upload_requires_login():
     assert resp.json()["code"] == 4010
 
 
-def test_upload_markdown_succeeds(upload_env):
+def test_upload_markdown_succeeds(upload_env, monkeypatch):
     settings, created, scheduled = upload_env
+    monkeypatch.setattr(
+        knowledge_base_service, "beijing_now", lambda: datetime(2026, 10, 21, 15, 30)
+    )
 
     resp = client.post(
         "/api/v1/knowledge-base/documents",
@@ -131,6 +134,7 @@ def test_upload_markdown_succeeds(upload_env):
     assert body["data"]["doc_id"] == "doc_fixed"
     assert body["data"]["file_name"] == "笔记.md"
     assert body["data"]["status"] == "pending"
+    assert body["data"]["created_at"] == "2026-10-21 15:30:00"
     saved = settings.kb_upload_path / "7" / "doc_fixed" / "笔记.md"
     assert saved.read_bytes() == b"# hello"
     assert created[0]["doc_id"] == "doc_fixed"

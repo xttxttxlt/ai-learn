@@ -21,10 +21,19 @@ class LoginResponse(BaseModel):
     user: UserOut
 
 
+class ImageQuotaOut(BaseModel):
+    usage_date: str
+    used: int
+    limit: int
+    remaining: int
+    available: bool = True
+
+
 class ProfileOut(UserOut):
     quiz_count: int = 0
     correct_count: int = 0
     average_accuracy: int = 0
+    image_quota: ImageQuotaOut
 
 
 class ProfileUpdateRequest(BaseModel):

@@ -15,6 +15,7 @@ from app.core.logging import get_logger
 from app.models.quiz import Question, Quiz
 from app.repositories import image_usage_repository
 from app.services import cos_storage_service
+from app.utils.time_utils import beijing_today
 
 logger = get_logger("image_generation_service")
 
@@ -241,7 +242,7 @@ async def attach_images(
     if not quiz.questions or not settings.image_generation_ready:
         return quiz
 
-    usage_date = today or date.today()
+    usage_date = today or beijing_today()
     try:
         used = await usage_repo.get_count(user_id, usage_date)
         remaining = max(0, settings.image_daily_limit - int(used))

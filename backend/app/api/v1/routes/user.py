@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 
 from app.core.auth import AuthUser, get_current_user
 from app.models.common import ok
 from app.models.user import LoginRequest, ProfileUpdateRequest
-from app.services import history_service, user_service
+from app.services import avatar_service, history_service, user_service
 
 router = APIRouter(prefix="/user", tags=["user"])
 
@@ -27,6 +27,15 @@ async def update_profile(
     profile = await user_service.update_profile(
         auth.user_id, nickname=req.nickname, avatar_url=req.avatar_url
     )
+    return ok(profile.model_dump())
+
+
+@router.post("/avatar")
+async def upload_avatar(
+    file: UploadFile = File(...), auth: AuthUser = Depends(get_current_user)
+) -> dict:
+    await avatar_service.update_avatar(auth.user_id, file)
+    profile = await user_service.get_profile(auth.user_id)
     return ok(profile.model_dump())
 
 

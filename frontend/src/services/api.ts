@@ -37,6 +37,10 @@ export function updateProfile(params: { nickname?: string; avatar_url?: string }
   return request<UserProfile>('/api/v1/user/profile', { method: 'PUT', data: params })
 }
 
+export function uploadAvatar(filePath: string, fileName = 'avatar.jpg') {
+  return uploadFile<UserProfile>('/api/v1/user/avatar', filePath, fileName, {})
+}
+
 export function getQuizHistory(page = 1, pageSize = 10) {
   return request<QuizHistoryList>(`/api/v1/user/quizzes?page=${page}&page_size=${pageSize}`)
 }

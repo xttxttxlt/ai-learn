@@ -16,20 +16,83 @@
   box-shadow: 0 12px 28px rgba(218, 156, 111, 0.12);
 }
 .user-card__avatar {
+  position: relative;
   width: 112px;
   height: 112px;
   flex: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #fff0e4;
   border: 2px solid #f1d7c0;
+  line-height: 1;
 }
-.user-card__avatar text {
+.user-card__avatar::after {
+  border: none;
+}
+.user-card__avatar-inner {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+}
+.user-card__avatar-inner text {
   color: #cc6326;
   font-size: 48px;
   font-weight: 800;
+}
+.user-card__avatar-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(58, 38, 22, 0.45);
+}
+.user-card__avatar-mask text {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+}
+.user-card__name-edit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.user-card__name-input {
+  width: 220px;
+  padding: 8px 18px;
+  border: 2px solid #f0d3bc;
+  border-radius: 999px;
+  background: #fff7ef;
+  color: var(--text);
+  font-size: 26px;
+}
+.nickname-action {
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: #ff7a2f;
+}
+.nickname-action text {
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+}
+.nickname-action--ghost {
+  background: #fff7ef;
+  border: 2px solid #f0d3bc;
+}
+.nickname-action--ghost text {
+  color: #8a5a37;
+}
+.nickname-action--disabled {
+  opacity: 0.6;
 }
 .user-card__info {
   flex: 1;

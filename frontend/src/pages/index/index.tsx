@@ -4,6 +4,7 @@ import Taro, { useDidHide, useDidShow } from '@tarojs/taro'
 import CoinPill from '@/components/CoinPill'
 import ProgressRing from '@/components/ProgressRing'
 import TabBar from '@/components/TabBar'
+import UserAvatar from '@/components/UserAvatar'
 import { createQuizJob, getProfile, getQuizHistory, getQuizJob } from '@/services/api'
 import { ApiError } from '@/services/request'
 import { ensureLogin, getCachedUser, setCachedUser } from '@/services/auth'
@@ -63,6 +64,26 @@ export default function Index() {
   const cached = getCachedUser()
   const nickname = profile?.nickname || cached?.nickname || '学习者'
   const coins = profile?.total_coins ?? cached?.total_coins ?? 0
+  const avatarUrl = profile?.avatar_url || cached?.avatar_url || ''
+
+  const quota = profile?.image_quota
+  const quotaFull = Boolean(quota?.available && quota.remaining <= 0)
+  const quotaText = !quota
+    ? '今日配图 --/100'
+    : !quota.available
+      ? '今日配图 暂不可用'
+      : quotaFull
+        ? `今日配图 ${quota.used}/${quota.limit}，额度已用完`
+        : `今日配图 ${quota.used}/${quota.limit}`
+
+  const applyProfile = useCallback((p: UserProfile) => {
+    setProfile(p)
+    setCachedUser({ id: p.id, nickname: p.nickname, avatar_url: p.avatar_url, total_coins: p.total_coins })
+  }, [])
+
+  useEffect(() => {
+    if (quotaFull) setWithImages(false)
+  }, [quotaFull])
 
   const stopPolling = useCallback(() => {
     pollTokenRef.current += 1
@@ -103,6 +124,7 @@ export default function Index() {
             stopPolling()
             clearActiveJob()
             setGenerating(false)
+            void getProfile().then(applyProfile).catch(() => {})
             if (result.quiz) {
               setCurrentQuiz(result.quiz)
               await Taro.navigateTo({ url: '/pages/quiz/index' })
@@ -138,7 +160,7 @@ export default function Index() {
 
       void tick(0)
     },
-    [finishFailure, stopPolling]
+    [applyProfile, finishFailure, stopPolling]
   )
 
   useEffect(() => {
@@ -155,8 +177,7 @@ export default function Index() {
     if (!logged) return
     try {
       const [p, h] = await Promise.all([getProfile(), getQuizHistory(1, 10)])
-      setProfile(p)
-      setCachedUser({ id: p.id, nickname: p.nickname, avatar_url: p.avatar_url, total_coins: p.total_coins })
+      applyProfile(p)
       setHistory(h.items)
     } catch (e) {
       // 拉取失败不打扰用户，展示缓存/空态
@@ -186,10 +207,11 @@ export default function Index() {
 
     setGenerating(true)
     try {
+      const useImages = withImages && !quotaFull
       const created = await createQuizJob({
         user_input: input,
         question_count: QUESTION_COUNT,
-        generate_images: withImages,
+        generate_images: useImages,
         request_id: makeRequestId()
       })
       const job: ActiveJob = {
@@ -197,7 +219,7 @@ export default function Index() {
         user_input: input,
         question_count: QUESTION_COUNT,
         created_at: Date.now(),
-        generate_images: withImages
+        generate_images: useImages
       }
       writeActiveJob(job)
       startPolling(job)
@@ -221,9 +243,7 @@ export default function Index() {
     <View className='page'>
       <View className='toolbar'>
         <View className='hello-user'>
-          <View className='hello-avatar'>
-            <Text>{nickname.slice(0, 1)}</Text>
-          </View>
+          <UserAvatar src={avatarUrl} name={nickname} className='hello-avatar' />
           <Text className='hello-name'>你好，{nickname}</Text>
         </View>
         <CoinPill value={coins} />
@@ -251,13 +271,13 @@ export default function Index() {
         <View className='image-toggle'>
           <View className='image-toggle__text'>
             <Text className='image-toggle__label'>生成配图</Text>
-            <Text className='image-toggle__desc'>每题配一张相关图片，每日限额 100 张</Text>
+            <Text className='image-toggle__desc'>每题配一张相关图片，{quotaText}</Text>
           </View>
           <Switch
             className='image-toggle__switch'
-            checked={withImages}
+            checked={withImages && !quotaFull}
             color='#ff7a2f'
-            disabled={generating}
+            disabled={generating || quotaFull}
             onChange={e => setWithImages(e.detail.value)}
           />
         </View>

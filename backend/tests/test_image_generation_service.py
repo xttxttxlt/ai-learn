@@ -532,3 +532,20 @@ async def test_attach_images_runs_concurrently():
     )
 
     assert generator.max_active >= 2
+
+
+async def test_attach_images_uses_beijing_today_by_default(monkeypatch):
+    quiz = _quiz(1)
+    repo = FakeUsageRepo()
+    monkeypatch.setattr(image_generation_service, "beijing_today", lambda: DAY)
+
+    await image_generation_service.attach_images(
+        7,
+        quiz,
+        _settings(),
+        usage_repo=repo,
+        generator=FakeGenerator(),
+        uploader=FakeUploader(),
+    )
+
+    assert ("get", 7, DAY) in repo.calls

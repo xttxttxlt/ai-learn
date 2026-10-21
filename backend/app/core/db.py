@@ -24,6 +24,10 @@ def get_pool() -> Optional[aiomysql.Pool]:
     return _pool
 
 
+def _time_zone_init_command(settings) -> str:
+    return f"SET time_zone = '{settings.mysql_time_zone}'"
+
+
 async def _run_schema_init() -> None:
     """执行 sql/init_mysql.sql 中的建库建表语句（全部 IF NOT EXISTS，可重复执行）。"""
     settings = get_settings()
@@ -39,6 +43,7 @@ async def _run_schema_init() -> None:
         password=settings.mysql_password,
         charset=settings.mysql_charset,
         autocommit=True,
+        init_command=_time_zone_init_command(settings),
     )
     try:
         async with conn.cursor() as cur:
@@ -66,6 +71,7 @@ async def init_db() -> None:
             minsize=settings.mysql_pool_minsize,
             maxsize=settings.mysql_pool_maxsize,
             autocommit=True,
+            init_command=_time_zone_init_command(settings),
         )
         logger.info("mysql_pool_ready", host=settings.mysql_host, db=settings.mysql_database)
     except Exception as exc:  # noqa: BLE001

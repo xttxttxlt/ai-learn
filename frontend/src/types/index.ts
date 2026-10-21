@@ -122,10 +122,19 @@ export interface User {
   total_coins: number
 }
 
+export interface ImageQuota {
+  usage_date: string
+  used: number
+  limit: number
+  remaining: number
+  available: boolean
+}
+
 export interface UserProfile extends User {
   quiz_count: number
   correct_count: number
   average_accuracy: number
+  image_quota: ImageQuota
 }
 
 export interface QuizHistoryItem {

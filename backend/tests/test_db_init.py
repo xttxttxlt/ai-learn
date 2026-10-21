@@ -39,7 +39,20 @@ class FakeSettings:
     mysql_port = 3306
     mysql_user = "root"
     mysql_password = ""
+    mysql_database = "ai_learn"
     mysql_charset = "utf8mb4"
+    mysql_pool_minsize = 1
+    mysql_pool_maxsize = 10
+    mysql_auto_init = True
+    mysql_time_zone = "+08:00"
+
+
+class FakePool:
+    def close(self):
+        pass
+
+    async def wait_closed(self):
+        pass
 
 
 async def test_schema_init_disables_sql_notes(monkeypatch, tmp_path):
@@ -50,8 +63,10 @@ async def test_schema_init_disables_sql_notes(monkeypatch, tmp_path):
         encoding="utf-8",
     )
     connection = FakeConnection()
+    connect_kwargs = {}
 
     async def fake_connect(**kwargs):
+        connect_kwargs.update(kwargs)
         return connection
 
     monkeypatch.setattr(db, "SCHEMA_FILE", schema)
@@ -64,6 +79,36 @@ async def test_schema_init_disables_sql_notes(monkeypatch, tmp_path):
     assert connection.cursor_obj.statements[1].startswith("CREATE TABLE IF NOT EXISTS a")
     assert connection.cursor_obj.statements[2].startswith("CREATE TABLE IF NOT EXISTS b")
     assert connection.closed is True
+    assert connect_kwargs["init_command"] == "SET time_zone = '+08:00'"
+
+
+async def test_init_db_sets_time_zone_on_pool(monkeypatch):
+    pool_kwargs = {}
+
+    async def fake_create_pool(**kwargs):
+        pool_kwargs.update(kwargs)
+        return FakePool()
+
+    async def no_schema_init():
+        return None
+
+    monkeypatch.setattr(db, "get_settings", lambda: FakeSettings())
+    monkeypatch.setattr(db, "_run_schema_init", no_schema_init)
+    monkeypatch.setattr(db.aiomysql, "create_pool", fake_create_pool)
+
+    await db.init_db()
+    await db.close_db()
+
+    assert pool_kwargs["init_command"] == "SET time_zone = '+08:00'"
+
+
+def test_mysql_time_zone_env_override(monkeypatch):
+    from app.core.config import Settings
+
+    monkeypatch.setenv("MYSQL_TIME_ZONE", "+05:30")
+
+    assert Settings(_env_file=None).mysql_time_zone == "+05:30"
+    assert Settings(_env_file=None, mysql_time_zone="+00:00").mysql_time_zone == "+00:00"
 
 
 @pytest.mark.parametrize(
