@@ -57,6 +57,13 @@ export interface KnowledgeBaseOverview {
   documents: KnowledgeDocument[]
 }
 
+export interface KnowledgeDocumentList {
+  items: KnowledgeDocument[]
+  total: number
+  page: number
+  page_size: number
+}
+
 export interface Quiz {
   quiz_id: string
   title: string
@@ -70,7 +77,9 @@ export interface QuizGenerateParams {
   user_input: string
   question_count?: number
   difficulty?: DifficultyFilter
-  document_ids?: string[]
+  use_web_search?: boolean
+  use_knowledge_base?: boolean
+  document_id?: string
   generate_images?: boolean
 }
 
@@ -130,11 +139,18 @@ export interface ImageQuota {
   available: boolean
 }
 
+export interface QuizCapabilities {
+  web_search: boolean
+  knowledge_base: boolean
+  image_generation: boolean
+}
+
 export interface UserProfile extends User {
   quiz_count: number
   correct_count: number
   average_accuracy: number
   image_quota: ImageQuota
+  quiz_capabilities: QuizCapabilities
 }
 
 export interface QuizHistoryItem {

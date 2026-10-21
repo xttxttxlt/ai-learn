@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 QuestionType = Literal["single", "multiple", "judge"]
 Difficulty = Literal["easy", "medium", "hard"]
@@ -42,17 +42,32 @@ class Question(BaseModel):
 
 
 class QuizGenerateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     user_input: str = Field(..., min_length=1, max_length=4000, description="用户想学习的内容")
     question_count: int = Field(5, ge=3, le=10, description="题目数量，默认 5")
     difficulty: DifficultyFilter = Field("mixed", description="难度筛选")
-    document_ids: list[str] = Field(
-        default_factory=list,
-        max_length=10,
-        description="文档范围（知识库文档业务ID）；为空表示首页全库/Agent 自主路由模式",
+    use_web_search: bool = Field(False, description="本次是否开启联网检索")
+    use_knowledge_base: bool = Field(False, description="本次是否使用个人知识库")
+    document_id: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=64,
+        description="知识库单选文档业务ID；仅 use_knowledge_base=true 时允许",
     )
     generate_images: bool = Field(
-        False, description="是否为本次题目生成配图；文档范围出题强制关闭"
+        False, description="是否为本次题目生成配图；知识库任务强制关闭"
     )
+
+    @model_validator(mode="after")
+    def _validate_source_mode(self) -> "QuizGenerateRequest":
+        if self.use_web_search and self.use_knowledge_base:
+            raise ValueError("联网检索与知识库不能同时开启")
+        if self.use_knowledge_base and not self.document_id:
+            raise ValueError("使用知识库时必须选择一份文档")
+        if not self.use_knowledge_base and self.document_id:
+            raise ValueError("未开启知识库时不能携带文档")
+        return self
 
 
 class Quiz(BaseModel):

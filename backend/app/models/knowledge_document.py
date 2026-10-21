@@ -28,3 +28,10 @@ class KnowledgeBaseStats(BaseModel):
 class KnowledgeBaseOverview(BaseModel):
     stats: KnowledgeBaseStats = Field(default_factory=KnowledgeBaseStats)
     documents: list[KnowledgeDocumentOut] = Field(default_factory=list)
+
+
+class KnowledgeDocumentList(BaseModel):
+    items: list[KnowledgeDocumentOut] = Field(default_factory=list)
+    total: int = 0
+    page: int = 1
+    page_size: int = 10

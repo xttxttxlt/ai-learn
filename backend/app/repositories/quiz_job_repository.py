@@ -42,23 +42,45 @@ async def mark_running(job_id: str, user_id: int) -> int:
     return rowcount
 
 
-async def mark_completed(job_id: str, user_id: int, result: dict[str, Any]) -> int:
+def _timings_json(timings: Optional[dict[str, Any]]) -> Optional[str]:
+    if timings is None:
+        return None
+    return json.dumps(timings, ensure_ascii=False)
+
+
+async def mark_completed(
+    job_id: str,
+    user_id: int,
+    result: dict[str, Any],
+    timings: Optional[dict[str, Any]] = None,
+) -> int:
     _, rowcount = await db.execute(
         """UPDATE quiz_jobs
            SET status = 'completed', result_json = %s, error_message = NULL,
-               finished_at = NOW()
+               timings_json = %s, finished_at = NOW()
            WHERE job_id = %s AND user_id = %s AND status IN ('pending', 'running')""",
-        (json.dumps(result, ensure_ascii=False), job_id, user_id),
+        (
+            json.dumps(result, ensure_ascii=False),
+            _timings_json(timings),
+            job_id,
+            user_id,
+        ),
     )
     return rowcount
 
 
-async def mark_failed(job_id: str, user_id: int, error_message: str) -> int:
+async def mark_failed(
+    job_id: str,
+    user_id: int,
+    error_message: str,
+    timings: Optional[dict[str, Any]] = None,
+) -> int:
     _, rowcount = await db.execute(
         """UPDATE quiz_jobs
-           SET status = 'failed', error_message = %s, finished_at = NOW()
+           SET status = 'failed', error_message = %s, timings_json = %s,
+               finished_at = NOW()
            WHERE job_id = %s AND user_id = %s AND status IN ('pending', 'running')""",
-        (error_message[:500], job_id, user_id),
+        (error_message[:500], _timings_json(timings), job_id, user_id),
     )
     return rowcount
 

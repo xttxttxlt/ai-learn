@@ -93,7 +93,7 @@ class FakeChain:
 def test_grounded_success_maps_fields_and_sources():
     agent = FakeAgent(result=_research_result())
     gchain = FakeChain([_ok(_parsed(interpretation="按 AI 智能体工程领域出题"))])
-    quiz = generate_quiz(_request(), agent=agent, grounded_chain=gchain)
+    quiz = generate_quiz(_request(use_web_search=True), agent=agent, grounded_chain=gchain)
     assert quiz.grounded is True
     assert quiz.interpretation == "按 AI 智能体工程领域出题"
     assert agent.calls == 1
@@ -109,7 +109,7 @@ def test_grounded_success_maps_fields_and_sources():
 def test_grounded_falls_back_on_agent_error():
     agent = FakeAgent(exc=RuntimeError("tavily down"))
     chain = FakeChain([_ok()])
-    quiz = generate_quiz(_request(), chain=chain, agent=agent)
+    quiz = generate_quiz(_request(use_web_search=True), chain=chain, agent=agent)
     assert agent.calls == 1
     assert chain.calls == 1
     assert quiz.grounded is False
@@ -119,7 +119,7 @@ def test_grounded_falls_back_on_agent_error():
 def test_grounded_falls_back_when_no_research_and_no_sources():
     agent = FakeAgent(result={"messages": [HumanMessage(content="x")]})
     chain = FakeChain([_ok()])
-    quiz = generate_quiz(_request(), chain=chain, agent=agent)
+    quiz = generate_quiz(_request(use_web_search=True), chain=chain, agent=agent)
     assert quiz.grounded is False
     assert chain.calls == 1
 
@@ -128,7 +128,7 @@ def test_grounded_falls_back_when_phase2_keeps_failing():
     agent = FakeAgent(result=_research_result())
     gchain = FakeChain([{"raw": object(), "parsed": None, "parsing_error": ValueError("bad json")}])
     chain = FakeChain([_ok()])
-    quiz = generate_quiz(_request(), chain=chain, agent=agent, grounded_chain=gchain)
+    quiz = generate_quiz(_request(use_web_search=True), chain=chain, agent=agent, grounded_chain=gchain)
     assert gchain.calls == 3  # llm_max_retries(2) + 1
     assert chain.calls == 1  # 降级到未接地
     assert quiz.grounded is False
@@ -141,7 +141,7 @@ def test_grounded_invalid_questions_fall_back():
     bad = QuizOutputSchema(title="t", summary="s", interpretation="", questions=[_question(answer=["Z"])])
     gchain.results = [{"raw": object(), "parsed": bad, "parsing_error": None}]
     chain = FakeChain([_ok()])
-    quiz = generate_quiz(_request(), chain=chain, agent=agent, grounded_chain=gchain)
+    quiz = generate_quiz(_request(use_web_search=True), chain=chain, agent=agent, grounded_chain=gchain)
     assert quiz.grounded is False
     assert chain.calls == 1
 

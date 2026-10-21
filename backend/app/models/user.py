@@ -29,11 +29,18 @@ class ImageQuotaOut(BaseModel):
     available: bool = True
 
 
+class QuizCapabilitiesOut(BaseModel):
+    web_search: bool = False
+    knowledge_base: bool = False
+    image_generation: bool = False
+
+
 class ProfileOut(UserOut):
     quiz_count: int = 0
     correct_count: int = 0
     average_accuracy: int = 0
     image_quota: ImageQuotaOut
+    quiz_capabilities: QuizCapabilitiesOut
 
 
 class ProfileUpdateRequest(BaseModel):

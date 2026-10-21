@@ -23,6 +23,7 @@ from app.llm.knowledge_base import build_vector_store
 from app.models.knowledge_document import (
     KnowledgeBaseOverview,
     KnowledgeBaseStats,
+    KnowledgeDocumentList,
     KnowledgeDocumentOut,
 )
 from app.repositories import knowledge_document_repository
@@ -64,6 +65,23 @@ async def get_overview(user_id: int) -> KnowledgeBaseOverview:
     return KnowledgeBaseOverview(
         stats=KnowledgeBaseStats(**stats),
         documents=[_to_document(row) for row in rows],
+    )
+
+
+async def list_documents(
+    user_id: int, page: int = 1, page_size: int = 10
+) -> KnowledgeDocumentList:
+    page = max(1, page)
+    page_size = min(max(1, page_size), 50)
+    total = await knowledge_document_repository.count_documents(user_id)
+    rows = await knowledge_document_repository.list_documents_page(
+        user_id, (page - 1) * page_size, page_size
+    )
+    return KnowledgeDocumentList(
+        items=[_to_document(row) for row in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 

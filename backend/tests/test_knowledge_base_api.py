@@ -107,6 +107,32 @@ def test_get_overview_returns_stats_and_documents(monkeypatch):
     assert body["data"]["documents"][0]["status"] == "processing"
 
 
+def test_list_documents_requires_login():
+    resp = client.get("/api/v1/knowledge-base/documents")
+
+    assert resp.status_code == 200
+    assert resp.json()["code"] == 4010
+
+
+def test_list_documents_paginated(monkeypatch):
+    fake = FakeDB().install(monkeypatch)
+    fake.fetch_one_queue = [{"total": 12}]
+    fake.fetch_all_queue = [[_doc_row(doc_id="doc_11")]]
+
+    resp = client.get(
+        "/api/v1/knowledge-base/documents?page=2&page_size=10", headers=HEADERS
+    )
+
+    body = resp.json()
+    assert body["code"] == 0
+    data = body["data"]
+    assert data["total"] == 12
+    assert data["page"] == 2
+    assert data["page_size"] == 10
+    assert data["items"][0]["doc_id"] == "doc_11"
+    assert fake.fetch_all_calls[0][1] == (7, 10, 10)
+
+
 def test_upload_requires_login():
     resp = client.post(
         "/api/v1/knowledge-base/documents",

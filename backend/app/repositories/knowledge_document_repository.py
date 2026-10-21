@@ -37,6 +37,25 @@ async def list_documents(user_id: int) -> list[dict[str, Any]]:
     )
 
 
+async def list_documents_page(
+    user_id: int, offset: int, limit: int
+) -> list[dict[str, Any]]:
+    return await db.fetch_all(
+        """SELECT * FROM knowledge_documents
+           WHERE user_id = %s ORDER BY created_at DESC, id DESC
+           LIMIT %s OFFSET %s""",
+        (user_id, limit, offset),
+    )
+
+
+async def count_documents(user_id: int) -> int:
+    row = await db.fetch_one(
+        "SELECT COUNT(*) AS total FROM knowledge_documents WHERE user_id = %s",
+        (user_id,),
+    )
+    return int((row or {}).get("total") or 0)
+
+
 async def get_stats(user_id: int) -> dict[str, int]:
     row = await db.fetch_one(
         """SELECT COUNT(*) AS total_documents,

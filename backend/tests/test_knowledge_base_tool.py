@@ -151,7 +151,7 @@ def test_home_mode_returns_insufficient_marker_when_all_below_threshold():
     assert artifact == {"results": []}
 
 
-def test_document_mode_keeps_low_relevance_results():
+def test_document_mode_returns_insufficient_marker_when_below_threshold():
     store = FakeStore(results=[_result(score=0.33)])
     tool = build_knowledge_base_tool(
         KnowledgeScope(user_id=7, document_ids=["doc_1"]),
@@ -159,10 +159,10 @@ def test_document_mode_keeps_low_relevance_results():
         store=store,
     )
 
-    content, artifact = tool.func(query="文档内容")
+    content, artifact = tool.func(query="文档外的主题")
 
-    assert "0.33" in content
-    assert len(artifact["results"]) == 1
+    assert content.startswith("[知识库无足够相关内容]")
+    assert artifact == {"results": []}
 
 
 def test_tool_swallows_search_exception():

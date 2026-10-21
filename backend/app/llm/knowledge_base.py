@@ -41,7 +41,7 @@ class EmbeddingServiceError(Exception):
 
 @dataclass(frozen=True)
 class KnowledgeScope:
-    """检索范围：document_ids 非空表示文档一键闯关，空表示当前用户全库。"""
+    """检索范围：document_ids 非空表示用户选定的单份文档，空表示当前用户全库。"""
 
     user_id: int
     document_ids: list[str] = field(default_factory=list)
@@ -280,8 +280,8 @@ def build_knowledge_base_tool(
 
     if scope.is_document_scope:
         description = (
-            "检索个人知识库中当前选定文档的相关片段（仅限当前文档，不使用联网）。"
-            "返回文档名、页码、相关度与分块摘要。"
+            "检索用户选定的一份文档的相关片段（仅限当前文档，不使用联网）。"
+            "仅返回相关度达到阈值的内容；若返回“无足够相关内容”，说明该文档未覆盖此主题。"
         )
     else:
         description = (
@@ -307,31 +307,30 @@ def build_knowledge_base_tool(
             return "[知识库无相关结果]", {"results": []}
 
         results = raw_results
-        if not scope.is_document_scope:
-            threshold = max(0.0, min(1.0, settings.kb_min_relevance_score))
-            filtered = [result for result in raw_results if result.score >= threshold]
-            if not filtered:
-                top_score = max(result.score for result in raw_results)
-                logger.info(
-                    "knowledge_base_no_relevant_results",
-                    user_id=scope.user_id,
-                    top_score=round(top_score, 3),
-                    threshold=threshold,
-                )
-                return (
-                    f"[知识库无足够相关内容] 最高相关度 {top_score:.2f}，"
-                    f"低于阈值 {threshold:.2f}；请改用联网检索或按通用知识出题。",
-                    {"results": []},
-                )
-            if len(filtered) < len(raw_results):
-                logger.info(
-                    "knowledge_base_results_filtered",
-                    user_id=scope.user_id,
-                    raw_count=len(raw_results),
-                    kept_count=len(filtered),
-                    threshold=threshold,
-                )
-            results = filtered
+        threshold = max(0.0, min(1.0, settings.kb_min_relevance_score))
+        filtered = [result for result in raw_results if result.score >= threshold]
+        if not filtered:
+            top_score = max(result.score for result in raw_results)
+            logger.info(
+                "knowledge_base_no_relevant_results",
+                user_id=scope.user_id,
+                top_score=round(top_score, 3),
+                threshold=threshold,
+            )
+            return (
+                f"[知识库无足够相关内容] 最高相关度 {top_score:.2f}，"
+                f"低于阈值 {threshold:.2f}；请改用联网检索或按通用知识出题。",
+                {"results": []},
+            )
+        if len(filtered) < len(raw_results):
+            logger.info(
+                "knowledge_base_results_filtered",
+                user_id=scope.user_id,
+                raw_count=len(raw_results),
+                kept_count=len(filtered),
+                threshold=threshold,
+            )
+        results = filtered
 
         artifact = {
             "results": [

@@ -149,6 +149,14 @@
   color: #8a98a5;
 }
 
+.kb-list-foot {
+  display: block;
+  padding: 12px 0 24px;
+  text-align: center;
+  font-size: 24px;
+  color: #9aa6b2;
+}
+
 /* 文档卡片 */
 .doc-card {
   margin-bottom: 22px;
@@ -259,11 +267,20 @@
   color: #c95d4f;
 }
 
-.doc-card__status-line {
+.doc-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
   margin-top: 20px;
   padding: 14px 18px;
   border-radius: 18px;
   background: #fbf7f2;
+}
+
+.doc-card__foot-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .doc-card__chunks {
@@ -274,6 +291,7 @@
 
 .doc-card__processing {
   font-size: 23px;
+  line-height: 1.5;
   color: #9a7b61;
 }
 
@@ -283,15 +301,10 @@
   color: #b8503f;
 }
 
-.doc-card__actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-top: 22px;
-}
-
 .doc-btn {
-  min-height: 76px;
+  min-height: 64px;
+  padding: 0 32px;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -301,15 +314,6 @@
 .doc-btn text {
   font-size: 26px;
   font-weight: 800;
-}
-
-.doc-btn--start {
-  background: linear-gradient(180deg, #ff944f, #ff6f27);
-  box-shadow: 0 10px 22px rgba(255, 122, 47, 0.22);
-}
-
-.doc-btn--start text {
-  color: #fff;
 }
 
 .doc-btn--delete {
@@ -357,70 +361,3 @@
   color: var(--muted);
 }
 
-/* 页内出题 loading */
-.kb-loading-mask {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 48px;
-  background: rgba(255, 250, 245, 0.92);
-  backdrop-filter: blur(4px);
-}
-
-.kb-loading-card {
-  width: 100%;
-  max-width: 560px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-  padding: 56px 40px;
-  border: 2px solid #f0dccb;
-  border-radius: 40px;
-  background: #fff;
-  box-shadow: 0 24px 60px rgba(203, 151, 108, 0.2);
-  text-align: center;
-}
-
-.kb-loading-spinner {
-  width: 76px;
-  height: 76px;
-  border: 6px solid rgba(255, 122, 47, 0.18);
-  border-top-color: #ff7a2f;
-  border-radius: 50%;
-  animation: kb-loading-spin 0.9s linear infinite;
-}
-
-.kb-loading-title {
-  font-family: var(--font-title);
-  font-size: 34px;
-  font-weight: 800;
-  color: var(--text);
-}
-
-.kb-loading-doc {
-  max-width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 26px;
-  font-weight: 700;
-  color: #cb6227;
-}
-
-.kb-loading-hint {
-  font-size: 23px;
-  color: #8a98a5;
-}
-
-@keyframes kb-loading-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}

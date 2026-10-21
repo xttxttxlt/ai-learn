@@ -55,6 +55,33 @@ async def test_list_documents_is_user_scoped_and_ordered(monkeypatch):
     assert args == (7,)
 
 
+async def test_list_documents_page_applies_limit_and_offset(monkeypatch):
+    fake = FakeDB().install(monkeypatch)
+    fake.fetch_all_queue = [[{"doc_id": "doc_11"}]]
+
+    rows = await repo.list_documents_page(7, offset=10, limit=10)
+
+    assert rows == [{"doc_id": "doc_11"}]
+    sql, args = fake.fetch_all_calls[0]
+    assert "WHERE user_id = %s" in sql
+    assert "ORDER BY created_at DESC" in sql
+    assert "LIMIT %s OFFSET %s" in sql
+    assert args == (7, 10, 10)
+
+
+async def test_count_documents_is_user_scoped(monkeypatch):
+    fake = FakeDB().install(monkeypatch)
+    fake.fetch_one_queue = [{"total": 12}]
+
+    total = await repo.count_documents(7)
+
+    assert total == 12
+    sql, args = fake.fetch_one_calls[0]
+    assert "COUNT(*)" in sql
+    assert "WHERE user_id = %s" in sql
+    assert args == (7,)
+
+
 async def test_get_stats_aggregates_and_normalizes(monkeypatch):
     fake = FakeDB().install(monkeypatch)
     fake.fetch_one_queue = [

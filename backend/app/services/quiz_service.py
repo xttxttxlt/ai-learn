@@ -1,4 +1,7 @@
+import time
 from typing import Any, Optional
+
+from langchain_core.messages import AIMessage, ToolMessage
 
 from app.core.config import get_settings
 from app.core.exceptions import QuizGenerationError, ValidationError
@@ -14,7 +17,6 @@ from app.llm.quiz_chain import build_grounded_chain, build_quiz_chain
 from app.llm.search_tools import build_search_tools
 from app.models.quiz import Option, Question, Quiz, QuizGenerateRequest, Source
 from app.prompts.quiz_prompt import (
-    RESEARCH_PROMPT_V2,
     RESEARCH_PROMPT_WITH_KB,
     format_research_user_message,
 )
@@ -31,13 +33,13 @@ _DIFFICULTY_INSTRUCTIONS = {
     "mixed": "难易混合，覆盖基础概念到进阶应用。",
 }
 
-DOCUMENT_UNAVAILABLE_MESSAGE = "文档内容不可用，请重新上传"
-DOCUMENT_QUIZ_FAILED_MESSAGE = "文档出题失败，请稍后重试"
-
-
 def _grounding_enabled(settings) -> bool:
     """仅当开启联网开关且配置了 Tavily key 时才走接地出题。"""
     return bool(settings.enable_web_search and settings.tavily_api_key)
+
+
+def _elapsed_ms(start: float) -> int:
+    return max(0, int((time.perf_counter() - start) * 1000))
 
 
 def _unwrap(result: Any) -> tuple[Any, Optional[Exception]]:
@@ -111,6 +113,7 @@ def _generate_grounded(
     agent: Optional[Any] = None,
     grounded_chain: Optional[Any] = None,
     kb_min_score: Optional[float] = None,
+    timings: Optional[dict[str, Any]] = None,
 ) -> Quiz:
     """接地出题（两阶段）：研究 Agent 联网检索/抽取出简报与来源 -> json_mode 链产出结构化题库。"""
     # 阶段一：研究（Agent 自主选择 web_search_brief/full、web_extract）
@@ -119,11 +122,24 @@ def _generate_grounded(
         agent = build_research_agent(llm, build_search_tools(settings))
 
     research_msg = format_research_user_message(cleaned)
-    result = agent.invoke(
-        {"messages": [{"role": "user", "content": research_msg}]},
-        config={"recursion_limit": settings.quiz_agent_recursion_limit},
-    )
+    research_start = time.perf_counter()
+    try:
+        result = agent.invoke(
+            {"messages": [{"role": "user", "content": research_msg}]},
+            config={"recursion_limit": settings.quiz_agent_recursion_limit},
+        )
+    finally:
+        if timings is not None:
+            timings["research_ms"] = _elapsed_ms(research_start)
     messages = result.get("messages") if isinstance(result, dict) else None
+    if timings is not None:
+        message_list = list(messages or [])
+        timings["research_llm_calls"] = sum(
+            1 for msg in message_list if isinstance(msg, AIMessage)
+        )
+        timings["research_tool_calls"] = sum(
+            1 for msg in message_list if isinstance(msg, ToolMessage)
+        )
     research = extract_research_text(messages)
     sources = [Source(**s) for s in extract_sources_from_messages(messages)]
     if kb_min_score is not None:
@@ -151,25 +167,32 @@ def _generate_grounded(
     }
     attempts = settings.llm_max_retries + 1
     last_error: Optional[Exception] = None
-    for attempt in range(attempts):
-        try:
-            res = grounded_chain.invoke(payload)
-            parsed, parsing_error = _unwrap(res)
-            if parsing_error is not None:
-                raise parsing_error
-            quiz = _build_quiz(parsed, cleaned, sources=sources, grounded=True)
-            if len(quiz.questions) != request.question_count:
-                logger.info(
-                    "quiz_count_mismatch",
-                    expected=request.question_count,
-                    actual=len(quiz.questions),
-                    path="grounded",
-                )
-            return quiz
-        except Exception as exc:  # noqa: BLE001
-            last_error = exc
-            logger.warning("grounded_gen_attempt_failed", attempt=attempt, error=str(exc))
-    raise QuizGenerationError("接地出题失败") from last_error
+    phase2_start = time.perf_counter()
+    try:
+        for attempt in range(attempts):
+            if timings is not None:
+                timings["phase2_attempts"] = attempt + 1
+            try:
+                res = grounded_chain.invoke(payload)
+                parsed, parsing_error = _unwrap(res)
+                if parsing_error is not None:
+                    raise parsing_error
+                quiz = _build_quiz(parsed, cleaned, sources=sources, grounded=True)
+                if len(quiz.questions) != request.question_count:
+                    logger.info(
+                        "quiz_count_mismatch",
+                        expected=request.question_count,
+                        actual=len(quiz.questions),
+                        path="grounded",
+                    )
+                return quiz
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                logger.warning("grounded_gen_attempt_failed", attempt=attempt, error=str(exc))
+        raise QuizGenerationError("接地出题失败") from last_error
+    finally:
+        if timings is not None:
+            timings["phase2_ms"] = _elapsed_ms(phase2_start)
 
 
 def _generate_plain(
@@ -178,6 +201,7 @@ def _generate_plain(
     settings,
     difficulty_instruction: str,
     chain: Optional[Any] = None,
+    timings: Optional[dict[str, Any]] = None,
 ) -> Quiz:
     """未接地出题（v1 链）：清洗后的文本直接进模型，带重试与兜底。"""
     if chain is None:
@@ -233,22 +257,21 @@ def _generate_document_quiz(
     agent: Optional[Any],
     grounded_chain: Optional[Any],
     kb_tool: Optional[Any],
+    chain: Optional[Any] = None,
+    timings: Optional[dict[str, Any]] = None,
 ) -> Quiz:
-    """文档一键闯关：仅提供知识库工具，不联网；无文档来源即失败。"""
-    if kb_tool is None:
-        try:
-            kb_tool = build_knowledge_base_tool(scope, settings)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("knowledge_tool_build_failed", error=str(exc))
-            raise QuizGenerationError(DOCUMENT_UNAVAILABLE_MESSAGE) from exc
-
-    if agent is None:
-        llm = build_chat_model(settings.quiz_temperature, settings.quiz_max_tokens)
-        agent = build_research_agent(
-            llm, [kb_tool], system_prompt=RESEARCH_PROMPT_WITH_KB
-        )
-
+    """知识库单选：仅检索所选文档，不联网；无有效文档来源时降级通用出题。"""
+    if timings is not None:
+        timings["path"] = "knowledge_base"
     try:
+        if kb_tool is None:
+            kb_tool = build_knowledge_base_tool(scope, settings)
+        if agent is None:
+            llm = build_chat_model(settings.quiz_temperature, settings.quiz_max_tokens)
+            agent = build_research_agent(
+                llm, [kb_tool], system_prompt=RESEARCH_PROMPT_WITH_KB
+            )
+
         quiz = _generate_grounded(
             request,
             cleaned,
@@ -256,87 +279,27 @@ def _generate_document_quiz(
             difficulty_instruction,
             agent=agent,
             grounded_chain=grounded_chain,
+            timings=timings,
         )
+        if _has_scoped_kb_source(quiz, scope):
+            return quiz
+        logger.info("knowledge_quiz_no_scoped_source_fallback_plain")
+        if timings is not None:
+            timings["fallback_reason"] = "no_scoped_kb_source"
     except Exception as exc:  # noqa: BLE001
-        logger.warning("document_quiz_failed", error=str(exc))
-        raise QuizGenerationError(DOCUMENT_QUIZ_FAILED_MESSAGE) from exc
+        logger.warning("knowledge_quiz_fallback_plain", error=str(exc))
+        if timings is not None:
+            timings["fallback_reason"] = f"knowledge_grounding_failed: {str(exc)[:160]}"
 
-    if not _has_scoped_kb_source(quiz, scope):
-        logger.warning("document_quiz_without_kb_source")
-        raise QuizGenerationError(DOCUMENT_UNAVAILABLE_MESSAGE)
-    return quiz
-
-
-def _generate_home_quiz_with_knowledge(
-    request: QuizGenerateRequest,
-    cleaned: str,
-    settings,
-    difficulty_instruction: str,
-    scope: KnowledgeScope,
-    chain: Optional[Any],
-    agent: Optional[Any],
-    grounded_chain: Optional[Any],
-    kb_tool: Optional[Any],
-) -> Quiz:
-    """首页出题：知识库 + 联网自主路由；失败依次降级到仅联网、未接地。"""
-    tools: list[Any] = []
-    if kb_tool is None:
-        try:
-            kb_tool = build_knowledge_base_tool(scope, settings)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("knowledge_tool_build_failed", error=str(exc))
-            kb_tool = None
-    if kb_tool is not None:
-        tools.append(kb_tool)
-    if _grounding_enabled(settings):
-        tools.extend(build_search_tools(settings))
-
-    if not tools:
-        return _generate_plain(
-            request, cleaned, settings, difficulty_instruction, chain=chain
-        )
-
-    grounded_agent = agent
-    if grounded_agent is None:
-        llm = build_chat_model(settings.quiz_temperature, settings.quiz_max_tokens)
-        grounded_agent = build_research_agent(
-            llm, tools, system_prompt=RESEARCH_PROMPT_WITH_KB
-        )
-
-    try:
-        return _generate_grounded(
-            request,
-            cleaned,
-            settings,
-            difficulty_instruction,
-            agent=grounded_agent,
-            grounded_chain=grounded_chain,
-            kb_min_score=settings.kb_min_relevance_score,
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("knowledge_quiz_fallback", error=str(exc))
-
-    # 注入 agent 的场景（测试或调用方自带 Agent）不再重建联网 Agent。
-    if agent is None and _grounding_enabled(settings):
-        try:
-            web_agent = build_research_agent(
-                build_chat_model(settings.quiz_temperature, settings.quiz_max_tokens),
-                build_search_tools(settings),
-                system_prompt=RESEARCH_PROMPT_V2,
-            )
-            return _generate_grounded(
-                request,
-                cleaned,
-                settings,
-                difficulty_instruction,
-                agent=web_agent,
-                grounded_chain=grounded_chain,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("web_quiz_fallback", error=str(exc))
-
+    if timings is not None:
+        timings["path"] = "knowledge_base_fallback_plain"
     return _generate_plain(
-        request, cleaned, settings, difficulty_instruction, chain=chain
+        request,
+        cleaned,
+        settings,
+        difficulty_instruction,
+        chain=chain,
+        timings=timings,
     )
 
 
@@ -347,16 +310,15 @@ def generate_quiz(
     grounded_chain: Optional[Any] = None,
     knowledge_scope: Optional[KnowledgeScope] = None,
     kb_tool: Optional[Any] = None,
+    timings: Optional[dict[str, Any]] = None,
 ) -> Quiz:
-    """出题主流程：清洗 -> 敏感词 -> 优先接地 -> 失败降级到未接地链。
+    """出题主流程：清洗 -> 敏感词 -> 按请求开关走三条互斥路径。
 
     chain / agent / grounded_chain 均可注入（用于测试）：
-    - 注入 chain：走未接地 v1 路径；
-    - 注入 agent（+可选 grounded_chain）：走两阶段接地路径（失败再降级到 chain/真实 v1 链）；
-    - 都不注入：按配置 enable_web_search + tavily_api_key 决定是否接地。
-    knowledge_scope 非空时启用个人知识库：
-    - document_ids 非空：文档一键闯关，仅知识库工具、不联网、无来源即失败；
-    - document_ids 为空：首页出题，知识库 + 联网自主路由，失败逐级降级。
+    - use_knowledge_base=true：仅检索所选文档，无有效来源时降级未接地；
+    - use_web_search=true 且联网能力可用：走两阶段联网接地，失败降级未接地；
+    - 否则：直接走未接地 v1 链。
+    knowledge_scope 仅在 use_knowledge_base=true 时由任务服务提供。
     """
     cleaned = clean_user_input(request.user_input)
     if not cleaned:
@@ -368,32 +330,30 @@ def generate_quiz(
         request.difficulty, _DIFFICULTY_INSTRUCTIONS["mixed"]
     )
 
-    if knowledge_scope is not None:
-        if knowledge_scope.is_document_scope:
-            return _generate_document_quiz(
-                request,
-                cleaned,
-                settings,
-                difficulty_instruction,
-                knowledge_scope,
-                agent,
-                grounded_chain,
-                kb_tool,
-            )
-        return _generate_home_quiz_with_knowledge(
+    if request.use_knowledge_base:
+        if knowledge_scope is None:
+            raise ValidationError("知识库范围缺失")
+        return _generate_document_quiz(
             request,
             cleaned,
             settings,
             difficulty_instruction,
             knowledge_scope,
-            chain,
             agent,
             grounded_chain,
             kb_tool,
+            chain=chain,
+            timings=timings,
         )
 
-    use_grounding = (agent is not None) or (chain is None and _grounding_enabled(settings))
-    if use_grounding:
+    use_web = request.use_web_search and _grounding_enabled(settings)
+    if request.use_web_search and not use_web:
+        logger.info("web_grounding_unavailable_fallback_plain")
+        if timings is not None:
+            timings["fallback_reason"] = "web_unavailable"
+    if use_web:
+        if timings is not None:
+            timings["path"] = "web"
         try:
             return _generate_grounded(
                 request,
@@ -402,8 +362,20 @@ def generate_quiz(
                 difficulty_instruction,
                 agent=agent,
                 grounded_chain=grounded_chain,
+                timings=timings,
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("grounded_quiz_fallback", error=str(exc))
+            if timings is not None:
+                timings["fallback_reason"] = "web_grounding_failed"
 
-    return _generate_plain(request, cleaned, settings, difficulty_instruction, chain=chain)
+    if timings is not None:
+        timings["path"] = "plain"
+    return _generate_plain(
+        request,
+        cleaned,
+        settings,
+        difficulty_instruction,
+        chain=chain,
+        timings=timings,
+    )

@@ -82,14 +82,15 @@ async def test_create_job_forces_generate_images_off_for_document_scope(monkeypa
         QuizJobCreateRequest(
             user_input="文档出题",
             request_id="req_1",
-            document_ids=["doc_1"],
+            use_knowledge_base=True,
+            document_id="doc_1",
             generate_images=True,
         ),
     )
 
     assert submitted[0][2].generate_images is False
     _, args = fake.executed[0]
-    assert "generate_images" not in args[3]
+    assert json.loads(args[3])["generate_images"] is False
 
 
 async def test_run_job_attaches_images_after_generation_and_before_persist(monkeypatch):
@@ -131,7 +132,7 @@ async def test_run_job_skips_images_when_disabled(monkeypatch):
     fake.execute_queue = [(0, 1), (0, 1)]
     calls: list[str] = []
 
-    monkeypatch.setattr(quiz_job_service, "generate_quiz", lambda req: _quiz())
+    monkeypatch.setattr(quiz_job_service, "generate_quiz", lambda req, **kwargs: _quiz())
 
     async def fake_attach(user_id, q):
         calls.append("images")
@@ -163,6 +164,12 @@ async def test_run_job_skips_images_for_document_scope(monkeypatch):
     async def fake_persist(user_id, q):
         calls.append("persist")
 
+    async def fake_validate(user_id, document_ids):
+        return document_ids
+
+    monkeypatch.setattr(
+        quiz_job_service.knowledge_base_service, "validate_document_scope", fake_validate
+    )
     monkeypatch.setattr(quiz_job_service, "generate_quiz", fake_generate)
     monkeypatch.setattr(quiz_job_service.image_generation_service, "attach_images", fake_attach)
     monkeypatch.setattr(quiz_job_service.persistence_service, "persist_quiz", fake_persist)
@@ -172,7 +179,8 @@ async def test_run_job_skips_images_for_document_scope(monkeypatch):
         7,
         QuizGenerateRequest(
             user_input="文档出题",
-            document_ids=["doc_1"],
+            use_knowledge_base=True,
+            document_id="doc_1",
             generate_images=True,
         ),
     )
@@ -185,7 +193,7 @@ async def test_run_job_completes_when_image_attachment_raises(monkeypatch):
     fake.execute_queue = [(0, 1), (0, 1)]
     persisted: list[str] = []
 
-    monkeypatch.setattr(quiz_job_service, "generate_quiz", lambda req: _quiz())
+    monkeypatch.setattr(quiz_job_service, "generate_quiz", lambda req, **kwargs: _quiz())
 
     async def boom_attach(user_id, q):
         raise RuntimeError("image service down")

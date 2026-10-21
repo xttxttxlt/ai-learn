@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Button, Input, Text, View } from '@tarojs/components'
-import Taro, { useDidShow } from '@tarojs/taro'
+import Taro, { useDidShow, useReachBottom } from '@tarojs/taro'
 import CoinPill from '@/components/CoinPill'
 import ProgressRing from '@/components/ProgressRing'
 import TabBar from '@/components/TabBar'
@@ -9,14 +9,19 @@ import { getProfile, getQuizHistory, updateProfile, uploadAvatar } from '@/servi
 import { ensureLogin, setCachedUser } from '@/services/auth'
 import { ApiError } from '@/services/request'
 import { formatHistoryDate } from '@/store'
+import { accuracyColor } from '@/utils/accuracy'
 import type { QuizHistoryItem, UserProfile } from '@/types'
 import './index.scss'
 
 const SLOGAN = '把知识做成关卡，一关一关闯下去。'
+const HISTORY_PAGE_SIZE = 10
 
 export default function Profile() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [history, setHistory] = useState<QuizHistoryItem[]>([])
+  const [historyPage, setHistoryPage] = useState(1)
+  const [historyTotal, setHistoryTotal] = useState(0)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [editingNickname, setEditingNickname] = useState(false)
@@ -35,9 +40,11 @@ export default function Profile() {
       return
     }
     try {
-      const [p, h] = await Promise.all([getProfile(), getQuizHistory(1, 20)])
+      const [p, h] = await Promise.all([getProfile(), getQuizHistory(1, HISTORY_PAGE_SIZE)])
       applyProfile(p)
       setHistory(h.items)
+      setHistoryPage(1)
+      setHistoryTotal(h.total)
     } catch (e) {
       // 静默失败，展示空态
     } finally {
@@ -47,6 +54,31 @@ export default function Profile() {
 
   useDidShow(() => {
     refresh()
+  })
+
+  const historyHasMore = history.length < historyTotal
+
+  const loadMoreHistory = async () => {
+    if (historyLoading || !historyHasMore) return
+    setHistoryLoading(true)
+    try {
+      const next = historyPage + 1
+      const h = await getQuizHistory(next, HISTORY_PAGE_SIZE)
+      setHistory(prev => {
+        const seen = new Set(prev.map(item => item.quiz_id))
+        return [...prev, ...h.items.filter(item => !seen.has(item.quiz_id))]
+      })
+      setHistoryPage(h.page)
+      setHistoryTotal(h.total)
+    } catch (e) {
+      // 触底加载失败保持现有列表，下次触底重试
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  useReachBottom(() => {
+    void loadMoreHistory()
   })
 
   const uploadSelectedAvatar = async (tempPath: string) => {
@@ -238,7 +270,7 @@ export default function Profile() {
               <ProgressRing
                 percent={item.accuracy}
                 size='sm'
-                color={item.accuracy >= 50 ? '#ff7a2f' : '#47a4ff'}
+                color={accuracyColor(item.accuracy)}
               />
             ) : (
               <Text className='item__status'>
@@ -247,6 +279,10 @@ export default function Profile() {
             )}
           </View>
         ))
+      )}
+
+      {history.length > 0 && (historyLoading || (!historyHasMore && history.length > HISTORY_PAGE_SIZE)) && (
+        <Text className='list-foot'>{historyLoading ? '加载中…' : '没有更多了'}</Text>
       )}
 
       <TabBar active='profile' />

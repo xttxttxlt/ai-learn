@@ -82,6 +82,21 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     )
 
 
+def _json_safe_errors(exc: RequestValidationError) -> list[dict]:
+    """Pydantic 的 ctx.error 可能是异常对象，需转成字符串后再返回。"""
+    errors = []
+    for error in exc.errors():
+        item = dict(error)
+        ctx = item.get("ctx")
+        if isinstance(ctx, dict):
+            item["ctx"] = {
+                key: str(value) if isinstance(value, BaseException) else value
+                for key, value in ctx.items()
+            }
+        errors.append(item)
+    return errors
+
+
 async def validation_error_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
@@ -91,7 +106,7 @@ async def validation_error_handler(
         content={
             "code": ValidationError.code,
             "message": ValidationError.message,
-            "data": {"errors": exc.errors()},
+            "data": {"errors": _json_safe_errors(exc)},
         },
     )
 

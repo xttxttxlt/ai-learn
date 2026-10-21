@@ -79,6 +79,28 @@ async def test_create_job_new_submits_background_task(monkeypatch):
     assert '"user_input": "什么是 RAG"' in args[3]
 
 
+async def test_create_job_persists_explicit_source_flags(monkeypatch):
+    fake = FakeDB().install(monkeypatch)
+    fake.execute_queue = [(1, 1)]
+    fake.fetch_one_queue = [_row("pending", job_id="job_new")]
+    monkeypatch.setattr(quiz_job_service, "generate_job_id", lambda: "job_new")
+    submitted: list[tuple] = []
+    monkeypatch.setattr(quiz_job_service, "_submit", lambda *args: submitted.append(args))
+
+    await quiz_job_service.create_job(
+        7,
+        QuizJobCreateRequest(user_input="RAG", request_id="req_web", use_web_search=True),
+    )
+
+    params = json.loads(fake.executed[0][1][3])
+    assert params["use_web_search"] is True
+    assert params["use_knowledge_base"] is False
+    assert params["generate_images"] is False
+    assert "document_id" not in params
+    assert submitted[0][2].use_web_search is True
+    assert submitted[0][2].use_knowledge_base is False
+
+
 async def test_create_job_duplicate_request_returns_existing_without_submitting(monkeypatch):
     fake = FakeDB().install(monkeypatch)
     fake.execute_queue = [(0, 0)]
@@ -129,7 +151,7 @@ async def test_run_job_completes_and_writes_result(monkeypatch):
     fake.execute_queue = [(0, 1), (0, 1)]
     quiz = _quiz()
     persisted: list[tuple] = []
-    monkeypatch.setattr(quiz_job_service, "generate_quiz", lambda req: quiz)
+    monkeypatch.setattr(quiz_job_service, "generate_quiz", lambda req, **kwargs: quiz)
 
     async def fake_persist(user_id, q):
         persisted.append((user_id, q.quiz_id))
@@ -149,7 +171,7 @@ async def test_run_job_marks_failed_with_readable_message(monkeypatch):
     fake = FakeDB().install(monkeypatch)
     fake.execute_queue = [(0, 1), (0, 1)]
 
-    def boom(req):
+    def boom(req, **kwargs):
         raise QuizGenerationError()
 
     monkeypatch.setattr(quiz_job_service, "generate_quiz", boom)
@@ -164,7 +186,7 @@ async def test_run_job_marks_failed_with_readable_message(monkeypatch):
 async def test_run_job_completes_even_if_persist_raises(monkeypatch):
     fake = FakeDB().install(monkeypatch)
     fake.execute_queue = [(0, 1), (0, 1)]
-    monkeypatch.setattr(quiz_job_service, "generate_quiz", lambda req: _quiz())
+    monkeypatch.setattr(quiz_job_service, "generate_quiz", lambda req, **kwargs: _quiz())
 
     async def boom_persist(user_id, quiz):
         raise RuntimeError("db down")

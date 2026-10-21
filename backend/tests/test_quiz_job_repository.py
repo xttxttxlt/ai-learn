@@ -59,9 +59,11 @@ async def test_mark_completed_writes_result_and_finished_at(monkeypatch):
 
     sql, args = fake.executed[0]
     assert "result_json = %s" in sql
+    assert "timings_json = %s" in sql
     assert "finished_at = NOW()" in sql
     assert args[0] == '{"quiz_id": "quiz_a"}'
-    assert args[1:] == ("job_a", 7)
+    assert args[1] is None
+    assert args[2:] == ("job_a", 7)
 
 
 async def test_mark_failed_truncates_message(monkeypatch):

@@ -3,6 +3,7 @@ import type {
   AnswerRecord,
   KnowledgeBaseOverview,
   KnowledgeDocument,
+  KnowledgeDocumentList,
   QuizJob,
   QuizJobCreated,
   QuizJobCreateParams,
@@ -51,6 +52,12 @@ export function getQuizDetail(quizId: string) {
 
 export function getKnowledgeBase() {
   return request<KnowledgeBaseOverview>('/api/v1/knowledge-base')
+}
+
+export function getKnowledgeDocuments(page = 1, pageSize = 10) {
+  return request<KnowledgeDocumentList>(
+    `/api/v1/knowledge-base/documents?page=${page}&page_size=${pageSize}`
+  )
 }
 
 export function uploadKnowledgeDocument(filePath: string, fileName: string) {

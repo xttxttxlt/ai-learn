@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 
 from app.core.auth import AuthUser, get_current_user
 from app.models.common import ok
@@ -13,6 +13,18 @@ router = APIRouter(prefix="/knowledge-base", tags=["knowledge-base"])
 async def get_overview(auth: AuthUser = Depends(get_current_user)) -> dict:
     overview = await knowledge_base_service.get_overview(auth.user_id)
     return ok(overview.model_dump())
+
+
+@router.get("/documents")
+async def list_documents(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=50),
+    auth: AuthUser = Depends(get_current_user),
+) -> dict:
+    documents = await knowledge_base_service.list_documents(
+        auth.user_id, page=page, page_size=page_size
+    )
+    return ok(documents.model_dump())
 
 
 @router.post("/documents")

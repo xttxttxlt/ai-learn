@@ -88,13 +88,9 @@ def test_research_user_message_formatter():
 
 def test_research_prompt_with_kb_contract():
     assert isinstance(RESEARCH_PROMPT_WITH_KB, str)
-    for token in (
-        "search_knowledge_base",
-        "web_search_brief",
-        "web_search_full",
-        "web_extract",
-    ):
-        assert token in RESEARCH_PROMPT_WITH_KB
+    assert "search_knowledge_base" in RESEARCH_PROMPT_WITH_KB
+    for token in ("web_search_brief", "web_search_full", "web_extract"):
+        assert token not in RESEARCH_PROMPT_WITH_KB
     assert "个人知识库" in RESEARCH_PROMPT_WITH_KB
     assert "当前文档" in RESEARCH_PROMPT_WITH_KB
     assert "不得编造" in RESEARCH_PROMPT_WITH_KB

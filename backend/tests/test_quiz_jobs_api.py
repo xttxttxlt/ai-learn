@@ -183,6 +183,66 @@ def test_sync_generate_endpoint_removed(job_repo):
     assert resp.status_code == 404
 
 
+def test_create_job_accepts_web_source_flag(job_repo):
+    resp = client.post(
+        "/api/v1/quiz/jobs",
+        json={
+            "user_input": "什么是 RAG",
+            "request_id": "req_web",
+            "use_web_search": True,
+        },
+        headers=HEADERS,
+    )
+
+    assert resp.json()["code"] == 0
+    params = job_repo.rows[(7, "req_web")]["params_json"]
+    assert params["use_web_search"] is True
+    assert params["use_knowledge_base"] is False
+
+
+def test_create_job_accepts_single_knowledge_document(job_repo, monkeypatch):
+    async def fake_validate(user_id, document_ids):
+        return document_ids
+
+    monkeypatch.setattr(
+        quiz_job_service.knowledge_base_service, "validate_document_scope", fake_validate
+    )
+
+    resp = client.post(
+        "/api/v1/quiz/jobs",
+        json={
+            "user_input": "文档出题",
+            "request_id": "req_kb",
+            "use_knowledge_base": True,
+            "document_id": "doc_1",
+        },
+        headers=HEADERS,
+    )
+
+    assert resp.json()["code"] == 0
+    params = job_repo.rows[(7, "req_kb")]["params_json"]
+    assert params["use_knowledge_base"] is True
+    assert params["document_id"] == "doc_1"
+    assert params["use_web_search"] is False
+
+
+def test_create_job_rejects_web_and_knowledge_base_together(job_repo):
+    resp = client.post(
+        "/api/v1/quiz/jobs",
+        json={
+            "user_input": "RAG",
+            "request_id": "req_both",
+            "use_web_search": True,
+            "use_knowledge_base": True,
+            "document_id": "doc_1",
+        },
+        headers=HEADERS,
+    )
+
+    assert resp.json()["code"] == 4000
+    assert job_repo.rows == {}
+
+
 def test_create_job_accepts_generate_images(job_repo):
     resp = client.post(
         "/api/v1/quiz/jobs",

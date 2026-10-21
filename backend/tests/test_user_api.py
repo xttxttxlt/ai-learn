@@ -123,7 +123,18 @@ def test_get_profile_includes_beijing_image_quota(monkeypatch):
         {"image_count": 35},
     ]
     monkeypatch.setattr(
-        user_service, "get_settings", lambda: Settings(_env_file=None, image_daily_limit=100)
+        user_service,
+        "get_settings",
+        lambda: Settings(
+            _env_file=None,
+            image_daily_limit=100,
+            dashscope_api_key="dashscope-test",
+            enable_image_generation=True,
+            cos_secret_id="secret-id",
+            cos_secret_key="secret-key",
+            cos_region="ap-guangzhou",
+            cos_bucket="bucket-1250000000",
+        ),
     )
     monkeypatch.setattr(user_service, "beijing_today", lambda: date(2026, 10, 21))
 

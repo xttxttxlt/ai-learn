@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.auth import create_token
-from app.core.exceptions import QuizGenerationError, ValidationError
+from app.core.exceptions import NotFoundError, QuizGenerationError, ValidationError
 from app.llm.knowledge_base import KnowledgeScope
 from app.main import app
 from app.models.quiz import Option, Question, Quiz, QuizGenerateRequest
@@ -59,6 +59,17 @@ def _reset_runner():
     quiz_job_service._running_tasks.clear()
 
 
+def _kb_request(**kw):
+    values = {
+        "user_input": "文档闯关",
+        "request_id": "req_1",
+        "use_knowledge_base": True,
+        "document_id": "doc_1",
+    }
+    values.update(kw)
+    return QuizJobCreateRequest(**values)
+
+
 async def test_create_job_validates_and_records_document_scope(monkeypatch):
     fake = FakeDB().install(monkeypatch)
     fake.execute_queue = [(1, 1)]
@@ -78,18 +89,16 @@ async def test_create_job_validates_and_records_document_scope(monkeypatch):
     submitted: list[tuple] = []
     monkeypatch.setattr(quiz_job_service, "_submit", lambda *args: submitted.append(args))
 
-    await quiz_job_service.create_job(
-        7,
-        QuizJobCreateRequest(
-            user_input="文档闯关", request_id="req_1", document_ids=["doc_1"]
-        ),
-    )
+    await quiz_job_service.create_job(7, _kb_request())
 
     assert validated == [(7, ["doc_1"])]
-    assert submitted[0][2].document_ids == ["doc_1"]
+    assert submitted[0][2].document_id == "doc_1"
+    assert submitted[0][2].use_knowledge_base is True
     _, args = fake.executed[0]
     params = json.loads(args[3])
-    assert params["document_ids"] == ["doc_1"]
+    assert params["document_id"] == "doc_1"
+    assert params["use_knowledge_base"] is True
+    assert params["use_web_search"] is False
 
 
 async def test_create_job_without_documents_skips_scope_validation(monkeypatch):
@@ -116,7 +125,10 @@ async def test_create_job_without_documents_skips_scope_validation(monkeypatch):
 
     assert called == []
     _, args = fake.executed[0]
-    assert "document_ids" not in json.loads(args[3])
+    params = json.loads(args[3])
+    assert params["use_knowledge_base"] is False
+    assert params["use_web_search"] is False
+    assert "document_id" not in params
 
 
 async def test_create_job_rejects_not_ready_document(monkeypatch):
@@ -132,12 +144,7 @@ async def test_create_job_rejects_not_ready_document(monkeypatch):
     )
 
     with pytest.raises(ValidationError):
-        await quiz_job_service.create_job(
-            7,
-            QuizJobCreateRequest(
-                user_input="文档闯关", request_id="req_1", document_ids=["doc_1"]
-            ),
-        )
+        await quiz_job_service.create_job(7, _kb_request())
 
     assert fake.executed == []
 
@@ -146,6 +153,15 @@ async def test_run_job_document_scope_passes_knowledge_scope(monkeypatch):
     fake = FakeDB().install(monkeypatch)
     fake.execute_queue = [(0, 1), (0, 1)]
     captured: dict = {}
+
+    async def fake_validate(user_id, document_ids):
+        return document_ids
+
+    monkeypatch.setattr(
+        quiz_job_service.knowledge_base_service,
+        "validate_document_scope",
+        fake_validate,
+    )
 
     def fake_generate(req, knowledge_scope=None, **kwargs):
         captured["req"] = req
@@ -160,7 +176,11 @@ async def test_run_job_document_scope_passes_knowledge_scope(monkeypatch):
     monkeypatch.setattr(quiz_job_service.persistence_service, "persist_quiz", fake_persist)
 
     await _run_job(
-        "job_a", 7, QuizGenerateRequest(user_input="文档闯关", document_ids=["doc_1"])
+        "job_a",
+        7,
+        QuizGenerateRequest(
+            user_input="文档闯关", use_knowledge_base=True, document_id="doc_1"
+        ),
     )
 
     scope = captured["scope"]
@@ -170,10 +190,9 @@ async def test_run_job_document_scope_passes_knowledge_scope(monkeypatch):
     assert fake.fetch_one_calls == []
 
 
-async def test_run_job_without_scope_uses_ready_documents(monkeypatch):
+async def test_run_job_without_kb_scope_does_not_lookup_ready_documents(monkeypatch):
     fake = FakeDB().install(monkeypatch)
     fake.execute_queue = [(0, 1), (0, 1)]
-    fake.fetch_one_queue = [{"ready_count": 1}]
     captured: dict = {}
 
     def fake_generate(req, knowledge_scope=None, **kwargs):
@@ -189,37 +208,53 @@ async def test_run_job_without_scope_uses_ready_documents(monkeypatch):
 
     await _run_job("job_a", 7, QuizGenerateRequest(user_input="RAG"))
 
-    assert captured["scope"] is not None
-    assert captured["scope"].document_ids == []
-    sql, args = fake.fetch_one_calls[0]
-    assert "status = 'ready'" in sql
-    assert args == (7,)
+    assert captured["scope"] is None
+    assert fake.fetch_one_calls == []
 
 
-async def test_run_job_without_ready_documents_keeps_old_signature(monkeypatch):
+async def test_run_job_kb_validation_failure_marks_failed(monkeypatch):
     fake = FakeDB().install(monkeypatch)
     fake.execute_queue = [(0, 1), (0, 1)]
-    captured: list[QuizGenerateRequest] = []
 
-    def fake_generate(req):
-        captured.append(req)
-        return _quiz()
+    async def fake_validate(user_id, document_ids):
+        raise NotFoundError("文档不存在或无权访问")
 
-    monkeypatch.setattr(quiz_job_service, "generate_quiz", fake_generate)
+    monkeypatch.setattr(
+        quiz_job_service.knowledge_base_service,
+        "validate_document_scope",
+        fake_validate,
+    )
+    called: list[bool] = []
+    monkeypatch.setattr(
+        quiz_job_service, "generate_quiz", lambda *args, **kwargs: called.append(True)
+    )
 
-    async def fake_persist(user_id, quiz):
-        return None
+    await _run_job(
+        "job_a",
+        7,
+        QuizGenerateRequest(
+            user_input="文档闯关", use_knowledge_base=True, document_id="doc_1"
+        ),
+    )
 
-    monkeypatch.setattr(quiz_job_service.persistence_service, "persist_quiz", fake_persist)
-
-    await _run_job("job_a", 7, QuizGenerateRequest(user_input="RAG"))
-
-    assert len(captured) == 1
+    assert called == []
+    sql, args = fake.executed[1]
+    assert "status = 'failed'" in sql
+    assert args[0] == "文档不存在或无权访问"
 
 
 async def test_run_job_document_failure_marks_failed(monkeypatch):
     fake = FakeDB().install(monkeypatch)
     fake.execute_queue = [(0, 1), (0, 1)]
+
+    async def fake_validate(user_id, document_ids):
+        return document_ids
+
+    monkeypatch.setattr(
+        quiz_job_service.knowledge_base_service,
+        "validate_document_scope",
+        fake_validate,
+    )
 
     def fake_generate(req, knowledge_scope=None, **kwargs):
         raise QuizGenerationError("文档内容不可用，请重新上传")
@@ -227,7 +262,11 @@ async def test_run_job_document_failure_marks_failed(monkeypatch):
     monkeypatch.setattr(quiz_job_service, "generate_quiz", fake_generate)
 
     await _run_job(
-        "job_a", 7, QuizGenerateRequest(user_input="文档闯关", document_ids=["doc_1"])
+        "job_a",
+        7,
+        QuizGenerateRequest(
+            user_input="文档闯关", use_knowledge_base=True, document_id="doc_1"
+        ),
     )
 
     sql, args = fake.executed[1]
@@ -235,35 +274,7 @@ async def test_run_job_document_failure_marks_failed(monkeypatch):
     assert args[0] == "文档内容不可用，请重新上传"
 
 
-async def test_run_job_ready_lookup_failure_falls_back_without_scope(monkeypatch):
-    fake = FakeDB().install(monkeypatch)
-    fake.execute_queue = [(0, 1), (0, 1)]
-    captured: list[QuizGenerateRequest] = []
-
-    async def boom(user_id):
-        raise RuntimeError("db down")
-
-    monkeypatch.setattr(
-        quiz_job_service.knowledge_document_repository, "count_ready", boom
-    )
-
-    def fake_generate(req):
-        captured.append(req)
-        return _quiz()
-
-    monkeypatch.setattr(quiz_job_service, "generate_quiz", fake_generate)
-
-    async def fake_persist(user_id, quiz):
-        return None
-
-    monkeypatch.setattr(quiz_job_service.persistence_service, "persist_quiz", fake_persist)
-
-    await _run_job("job_a", 7, QuizGenerateRequest(user_input="RAG"))
-
-    assert len(captured) == 1
-
-
-def test_api_passes_document_ids(monkeypatch):
+def test_api_passes_document_id(monkeypatch):
     captured: dict = {}
 
     async def fake_create(user_id, req):
@@ -278,7 +289,8 @@ def test_api_passes_document_ids(monkeypatch):
         json={
             "user_input": "文档闯关",
             "request_id": "req_kb",
-            "document_ids": ["doc_1"],
+            "use_knowledge_base": True,
+            "document_id": "doc_1",
             "question_count": 5,
         },
         headers=HEADERS,
@@ -288,12 +300,11 @@ def test_api_passes_document_ids(monkeypatch):
     assert body["code"] == 0
     assert body["data"] == {"job_id": "job_fixed", "status": "pending"}
     assert captured["user_id"] == 7
-    assert captured["req"].document_ids == ["doc_1"]
+    assert captured["req"].document_id == "doc_1"
+    assert captured["req"].use_knowledge_base is True
 
 
 def test_api_document_scope_rejects_foreign_document(monkeypatch):
-    from app.core.exceptions import NotFoundError
-
     async def fake_create(user_id, req):
         raise NotFoundError("文档不存在或无权访问")
 
@@ -304,7 +315,8 @@ def test_api_document_scope_rejects_foreign_document(monkeypatch):
         json={
             "user_input": "文档闯关",
             "request_id": "req_kb",
-            "document_ids": ["doc_other"],
+            "use_knowledge_base": True,
+            "document_id": "doc_other",
         },
         headers=HEADERS,
     )
