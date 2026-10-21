@@ -116,6 +116,55 @@ def test_tool_returns_empty_marker_without_results():
     assert artifact == {"results": []}
 
 
+def test_home_mode_filters_low_relevance_results():
+    store = FakeStore(
+        results=[
+            _result(score=0.81, snippet="高相关片段"),
+            _result(doc_id="doc_2", chunk_index=4, score=0.59, snippet="低相关片段"),
+        ]
+    )
+    tool = build_knowledge_base_tool(
+        KnowledgeScope(user_id=7), settings=_settings(), store=store
+    )
+
+    content, artifact = tool.func(query="RAG 是什么")
+
+    assert "高相关片段" in content
+    assert "低相关片段" not in content
+    assert len(artifact["results"]) == 1
+    assert artifact["results"][0]["score"] == 0.81
+
+
+def test_home_mode_returns_insufficient_marker_when_all_below_threshold():
+    store = FakeStore(
+        results=[_result(score=0.331), _result(doc_id="doc_2", chunk_index=4, score=0.274)]
+    )
+    tool = build_knowledge_base_tool(
+        KnowledgeScope(user_id=7), settings=_settings(), store=store
+    )
+
+    content, artifact = tool.func(query="常见动漫人物")
+
+    assert content.startswith("[知识库无足够相关内容]")
+    assert "0.33" in content
+    assert "0.60" in content
+    assert artifact == {"results": []}
+
+
+def test_document_mode_keeps_low_relevance_results():
+    store = FakeStore(results=[_result(score=0.33)])
+    tool = build_knowledge_base_tool(
+        KnowledgeScope(user_id=7, document_ids=["doc_1"]),
+        settings=_settings(),
+        store=store,
+    )
+
+    content, artifact = tool.func(query="文档内容")
+
+    assert "0.33" in content
+    assert len(artifact["results"]) == 1
+
+
 def test_tool_swallows_search_exception():
     tool = build_knowledge_base_tool(
         KnowledgeScope(user_id=7),

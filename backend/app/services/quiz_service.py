@@ -110,6 +110,7 @@ def _generate_grounded(
     difficulty_instruction: str,
     agent: Optional[Any] = None,
     grounded_chain: Optional[Any] = None,
+    kb_min_score: Optional[float] = None,
 ) -> Quiz:
     """接地出题（两阶段）：研究 Agent 联网检索/抽取出简报与来源 -> json_mode 链产出结构化题库。"""
     # 阶段一：研究（Agent 自主选择 web_search_brief/full、web_extract）
@@ -125,6 +126,15 @@ def _generate_grounded(
     messages = result.get("messages") if isinstance(result, dict) else None
     research = extract_research_text(messages)
     sources = [Source(**s) for s in extract_sources_from_messages(messages)]
+    if kb_min_score is not None:
+        sources = [
+            source
+            for source in sources
+            if not (
+                source.kind == "knowledge_base"
+                and (source.score is None or source.score < kb_min_score)
+            )
+        ]
     if not research.strip() and not sources:
         raise QuizGenerationError("接地未取得有效检索信息")
 
@@ -301,6 +311,7 @@ def _generate_home_quiz_with_knowledge(
             difficulty_instruction,
             agent=grounded_agent,
             grounded_chain=grounded_chain,
+            kb_min_score=settings.kb_min_relevance_score,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("knowledge_quiz_fallback", error=str(exc))

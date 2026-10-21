@@ -48,7 +48,7 @@ def _ok():
     return {"raw": object(), "parsed": parsed, "parsing_error": None}
 
 
-def _kb_artifact(doc_id="doc_1"):
+def _kb_artifact(doc_id="doc_1", score=0.8):
     return {
         "results": [
             {
@@ -57,13 +57,15 @@ def _kb_artifact(doc_id="doc_1"):
                 "chunk_index": 0,
                 "page": 2,
                 "snippet": "知识库事实片段",
-                "score": 0.8,
+                "score": score,
             }
         ]
     }
 
 
-def _research_result(kb_doc_id="doc_1", with_kb=True, brief="【解读】按文档出题"):
+def _research_result(
+    kb_doc_id="doc_1", with_kb=True, brief="【解读】按文档出题", kb_score=0.8
+):
     messages = [HumanMessage(content="研究一下")]
     if with_kb:
         messages.append(
@@ -71,7 +73,7 @@ def _research_result(kb_doc_id="doc_1", with_kb=True, brief="【解读】按文�
                 content="知识库摘要",
                 tool_call_id="1",
                 name="search_knowledge_base",
-                artifact=_kb_artifact(kb_doc_id),
+                artifact=_kb_artifact(kb_doc_id, kb_score),
             )
         )
     messages.append(AIMessage(content=brief))
@@ -194,6 +196,37 @@ def test_home_mode_without_web_uses_kb_tool_only(monkeypatch):
     )
 
     assert [tool.name for tool in captured[0]["tools"]] == ["search_knowledge_base"]
+
+
+def test_home_mode_filters_low_score_kb_sources(monkeypatch):
+    _patch_builders(
+        monkeypatch,
+        [FakeAgent(result=_research_result(kb_score=0.33))],
+    )
+
+    quiz = generate_quiz(
+        _request(),
+        knowledge_scope=KnowledgeScope(user_id=7),
+        grounded_chain=FakeChain([_ok()]),
+    )
+
+    assert quiz.sources == []
+
+
+def test_document_mode_keeps_low_score_kb_sources(monkeypatch):
+    _patch_builders(
+        monkeypatch,
+        [FakeAgent(result=_research_result(kb_score=0.33))],
+    )
+
+    quiz = generate_quiz(
+        _request(),
+        knowledge_scope=KnowledgeScope(user_id=7, document_ids=["doc_1"]),
+        grounded_chain=FakeChain([_ok()]),
+    )
+
+    assert quiz.sources[0].kind == "knowledge_base"
+    assert quiz.sources[0].score == 0.33
 
 
 def test_document_mode_uses_only_kb_tool(monkeypatch):

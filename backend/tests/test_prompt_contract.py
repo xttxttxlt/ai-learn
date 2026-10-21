@@ -100,6 +100,7 @@ def test_research_prompt_with_kb_contract():
     assert "不得编造" in RESEARCH_PROMPT_WITH_KB
     assert "10 次" in RESEARCH_PROMPT_WITH_KB
     assert "联网" in RESEARCH_PROMPT_WITH_KB
+    assert "无足够相关内容" in RESEARCH_PROMPT_WITH_KB
 
 
 def test_grounded_prompt_mentions_knowledge_base_sources():

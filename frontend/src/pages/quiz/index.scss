@@ -53,6 +53,17 @@
   font-family: var(--font-title);
 }
 
+/* 题目配图 */
+.quiz-image {
+  display: block;
+  width: 100%;
+  margin: 8px 0 4px;
+  border: 2px solid #f0e2d6;
+  border-radius: 28px;
+  background: #fff;
+  overflow: hidden;
+}
+
 /* 选项 */
 .option {
   display: flex;

@@ -56,6 +56,17 @@ async def test_persist_quiz_writes_session(monkeypatch):
     assert json.loads(args[5])[0]["id"] == "q1"
 
 
+async def test_persist_quiz_writes_image_url(monkeypatch):
+    fake = FakeDB().install(monkeypatch)
+    quiz = _quiz()
+    quiz.questions[0].image_url = "https://cdn.example.com/q1.png"
+
+    await persistence_service.persist_quiz(7, quiz)
+
+    _, args = fake.executed[0]
+    assert json.loads(args[5])[0]["image_url"] == "https://cdn.example.com/q1.png"
+
+
 async def test_persist_quiz_swallows_db_error(monkeypatch):
     fake = FakeDB().install(monkeypatch)
 

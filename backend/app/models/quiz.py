@@ -36,6 +36,9 @@ class Question(BaseModel):
     explanation: str
     knowledge_point: str
     difficulty: Difficulty
+    image_url: Optional[str] = Field(
+        None, description="题目配图的永久访问 URL；未生成配图时为空"
+    )
 
 
 class QuizGenerateRequest(BaseModel):
@@ -46,6 +49,9 @@ class QuizGenerateRequest(BaseModel):
         default_factory=list,
         max_length=10,
         description="文档范围（知识库文档业务ID）；为空表示首页全库/Agent 自主路由模式",
+    )
+    generate_images: bool = Field(
+        False, description="是否为本次题目生成配图；文档范围出题强制关闭"
     )
 
 

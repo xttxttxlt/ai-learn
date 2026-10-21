@@ -18,7 +18,11 @@ from app.llm.knowledge_base import KnowledgeScope
 from app.models.quiz import Quiz, QuizGenerateRequest
 from app.models.quiz_job import QuizJobCreated, QuizJobCreateRequest, QuizJobOut
 from app.repositories import knowledge_document_repository, quiz_job_repository
-from app.services import knowledge_base_service, persistence_service
+from app.services import (
+    image_generation_service,
+    knowledge_base_service,
+    persistence_service,
+)
 from app.services.quiz_service import generate_quiz
 from app.utils.content_filter import assert_safe
 from app.utils.id_generator import generate_job_id
@@ -79,6 +83,12 @@ async def _run_job(job_id: str, user_id: int, req: QuizGenerateRequest) -> None:
                 logger.error("quiz_job_mark_failed_error", job_id=job_id, error=str(mark_exc))
             return
 
+        if req.generate_images and not req.document_ids:
+            try:
+                quiz = await image_generation_service.attach_images(user_id, quiz)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("quiz_job_images_failed", job_id=job_id, error=str(exc))
+
         try:
             await persistence_service.persist_quiz(user_id, quiz)
         except Exception as exc:  # noqa: BLE001
@@ -122,11 +132,14 @@ async def create_job(user_id: int, req: QuizJobCreateRequest) -> QuizJobCreated:
         )
 
     job_id = generate_job_id()
+    generate_images = bool(req.generate_images and not document_ids)
     params = {
         "user_input": cleaned,
         "question_count": req.question_count,
         "difficulty": req.difficulty,
     }
+    if generate_images:
+        params["generate_images"] = True
     if document_ids:
         params["document_ids"] = document_ids
     try:
@@ -150,6 +163,7 @@ async def create_job(user_id: int, req: QuizJobCreateRequest) -> QuizJobCreated:
                 question_count=req.question_count,
                 difficulty=req.difficulty,
                 document_ids=document_ids,
+                generate_images=generate_images,
             ),
         )
     return QuizJobCreated(job_id=job["job_id"], status=job["status"])

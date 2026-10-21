@@ -110,6 +110,38 @@
 .quick-textarea__ph {
   color: #8b97a2;
 }
+.image-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 20px;
+  padding: 20px 24px;
+  border: 2px solid #f0d3bc;
+  border-radius: 28px;
+  background: #fffdfb;
+}
+.image-toggle__text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.image-toggle__label {
+  font-size: 28px;
+  font-weight: 800;
+  color: #7f6347;
+}
+.image-toggle__desc {
+  font-size: 23px;
+  line-height: 1.5;
+  color: #8a98a5;
+}
+.image-toggle__switch {
+  transform: scale(0.85);
+  transform-origin: right center;
+}
 .home-actions {
   display: flex;
   justify-content: center;

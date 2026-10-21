@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS quiz_jobs (
     user_id BIGINT UNSIGNED NOT NULL COMMENT '所属用户ID，关联 users.id',
     request_id VARCHAR(64) NOT NULL COMMENT '客户端幂等请求ID，同一用户内唯一',
     status VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT '任务状态：pending=待执行，running=生成中，completed=已完成，failed=失败',
-    params_json JSON NOT NULL COMMENT '出题参数JSON，含 user_input/question_count/difficulty',
+    params_json JSON NOT NULL COMMENT '出题参数JSON，含 user_input/question_count/difficulty/generate_images',
     result_json JSON NULL COMMENT '完成后的题库JSON，含题目、接地标记与参考来源',
     error_message VARCHAR(500) NULL COMMENT '失败时的可读错误摘要，不存异常堆栈',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -128,3 +128,18 @@ CREATE TABLE IF NOT EXISTS knowledge_documents (
         ON DELETE CASCADE
         ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='个人知识库文档表';
+
+CREATE TABLE IF NOT EXISTS image_generation_usage (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '用量ID，自增主键',
+    user_id BIGINT UNSIGNED NOT NULL COMMENT '所属用户ID，关联 users.id',
+    usage_date DATE NOT NULL COMMENT '配额日期（自然日）',
+    image_count INT NOT NULL DEFAULT 0 COMMENT '当日已预留或已成功转存的配图张数',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_image_usage_user_date (user_id, usage_date),
+    CONSTRAINT fk_image_usage_user_id
+        FOREIGN KEY (user_id) REFERENCES users (id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='每日配图生成用量表';

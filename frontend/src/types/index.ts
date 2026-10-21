@@ -16,6 +16,7 @@ export interface Question {
   explanation: string
   knowledge_point: string
   difficulty: Difficulty
+  image_url?: string | null
 }
 
 export interface Source {
@@ -70,6 +71,7 @@ export interface QuizGenerateParams {
   question_count?: number
   difficulty?: DifficultyFilter
   document_ids?: string[]
+  generate_images?: boolean
 }
 
 export type QuizJobStatus = 'pending' | 'running' | 'completed' | 'failed'

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { View, Text } from '@tarojs/components'
+import { View, Text, Image } from '@tarojs/components'
 import Taro, { useLoad } from '@tarojs/taro'
 import CoinPill from '@/components/CoinPill'
 import { getCachedUser } from '@/services/auth'
@@ -39,6 +39,7 @@ export default function QuizPage() {
   const [coinTotal, setCoinTotal] = useState<number>(getCachedUser()?.total_coins ?? 0)
   const [explainOpen, setExplainOpen] = useState(true)
   const [sourcesOpen, setSourcesOpen] = useState(false)
+  const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({})
 
   // 支持断点续答：URL 带 quiz_id 时从后端拉题库，并按本地进度恢复题号与已答记录
   useLoad(options => {
@@ -108,6 +109,7 @@ export default function QuizPage() {
 
   const total = quiz.questions.length
   const q = quiz.questions[idx]
+  const imageUrl = q.image_url || ''
   const rec = records[q.id]
   const submitted = !!rec
   const selected = submitted ? rec.selected_answers : pending
@@ -213,6 +215,16 @@ export default function QuizPage() {
         {stripTypeTag(q.stem)}
         <Text className={`qtype qtype--${q.type}`}>{TYPE_LABEL[q.type]}</Text>
       </Text>
+
+      {imageUrl && !brokenImages[q.id] && (
+        <Image
+          className='quiz-image'
+          src={imageUrl}
+          mode='widthFix'
+          onClick={() => Taro.previewImage({ urls: [imageUrl] })}
+          onError={() => setBrokenImages(prev => ({ ...prev, [q.id]: true }))}
+        />
+      )}
 
       <View className='options'>
         {q.options.map(opt => (

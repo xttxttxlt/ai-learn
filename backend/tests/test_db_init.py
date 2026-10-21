@@ -68,7 +68,11 @@ async def test_schema_init_disables_sql_notes(monkeypatch, tmp_path):
 
 @pytest.mark.parametrize(
     "relative_path",
-    ["init_mysql.sql", "migrations/20261020_add_quiz_grounding.sql"],
+    [
+        "init_mysql.sql",
+        "migrations/20261020_add_quiz_grounding.sql",
+        "migrations/20261021_add_image_generation.sql",
+    ],
 )
 def test_sql_files_have_no_integer_display_width(relative_path):
     text = (SQL_DIR / relative_path).read_text(encoding="utf-8")
@@ -78,3 +82,15 @@ def test_sql_files_have_no_integer_display_width(relative_path):
         text,
         re.IGNORECASE,
     )
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    ["init_mysql.sql", "migrations/20261021_add_image_generation.sql"],
+)
+def test_image_usage_table_is_created_idempotently(relative_path):
+    text = (SQL_DIR / relative_path).read_text(encoding="utf-8")
+
+    assert "CREATE TABLE IF NOT EXISTS image_generation_usage" in text
+    assert "uk_image_usage_user_date" in text
+    assert "COMMENT='每日配图生成用量表'" in text

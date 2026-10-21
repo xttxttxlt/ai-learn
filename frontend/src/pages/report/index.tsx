@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { View, Text } from '@tarojs/components'
+import { View, Text, Image } from '@tarojs/components'
 import Taro, { useLoad } from '@tarojs/taro'
 import CoinPill from '@/components/CoinPill'
 import ProgressRing from '@/components/ProgressRing'
@@ -12,8 +12,21 @@ import {
   getCurrentQuiz
 } from '@/store'
 import { isKnowledgeBaseSource, knowledgeBaseMeta } from '@/utils/source'
-import type { Report, Source } from '@/types'
+import type { Question, Report, Source } from '@/types'
 import './index.scss'
+
+function stripTypeTag(stem: string): string {
+  return stem
+    .replace(/[（(]\s*(单选|多选|判断)\s*[)）]/g, '')
+    .trim()
+}
+
+function answerText(q: Question): string {
+  const texts = q.options
+    .filter(opt => q.answer.includes(opt.key))
+    .map(opt => `${opt.key}. ${opt.text}`)
+  return texts.join('、') || '—'
+}
 
 export default function ReportPage() {
   const [report, setReport] = useState<Report | null>(null)
@@ -26,6 +39,7 @@ export default function ReportPage() {
   const [reviewMode, setReviewMode] = useState(false)
   const [reviewQuizId, setReviewQuizId] = useState('')
   const [sources, setSources] = useState<Source[]>([])
+  const [reviewQuestions, setReviewQuestions] = useState<Question[]>([])
 
   const loadReview = async (quizId: string) => {
     setLoading(true)
@@ -34,6 +48,7 @@ export default function ReportPage() {
       const detail = await getQuizDetail(quizId)
       setTopic(detail.title)
       setSources(detail.sources || [])
+      setReviewQuestions(detail.questions || [])
       const correct = detail.answer_records.filter(r => r.is_correct).length
       setEarned(correct * COIN_PER_CORRECT)
       setWrongCount(detail.answer_records.length - correct)
@@ -55,6 +70,7 @@ export default function ReportPage() {
     const records = getAnswerRecords()
     setTopic(quiz?.title || '本次学习')
     setSources(quiz?.sources || [])
+    setReviewQuestions(quiz?.questions || [])
     const correct = records.filter(r => r.is_correct).length
     setEarned(correct * COIN_PER_CORRECT)
     setWrongCount(records.filter(r => !r.is_correct).length)
@@ -129,6 +145,9 @@ export default function ReportPage() {
 
   const r = report
   const headline = r.accuracy >= 80 ? '你这局学得很稳' : r.accuracy >= 60 ? '不错，稳步前进' : '别灰心，再闯一次'
+  const reviewImageUrls = reviewQuestions
+    .map(q => q.image_url)
+    .filter((url): url is string => Boolean(url))
 
   return (
     <View className='page'>
@@ -254,6 +273,37 @@ export default function ReportPage() {
                 ) : (
                   <Text className='src-item__url'>{s.url}</Text>
                 )}
+              </View>
+            )
+          })}
+        </View>
+      )}
+
+      {/* 题目回顾（含配图） */}
+      {reviewQuestions.length > 0 && (
+        <View className='note-card'>
+          <View className='card-h'>
+            <View className='icon icon-book card-h__icon' />
+            <Text className='card-h__title'>题目回顾</Text>
+          </View>
+          {reviewQuestions.map((q, i) => {
+            const imageUrl = q.image_url || ''
+            return (
+              <View className='review-item' key={q.id}>
+                <Text className='review-item__stem'>
+                  {i + 1}. {stripTypeTag(q.stem)}
+                </Text>
+                {imageUrl && (
+                  <Image
+                    className='review-item__image'
+                    src={imageUrl}
+                    mode='widthFix'
+                    onClick={() =>
+                      Taro.previewImage({ urls: reviewImageUrls, current: imageUrl })
+                    }
+                  />
+                )}
+                <Text className='review-item__answer'>正确答案：{answerText(q)}</Text>
               </View>
             )
           })}

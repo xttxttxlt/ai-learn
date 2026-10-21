@@ -181,3 +181,31 @@ def test_sync_generate_endpoint_removed(job_repo):
     )
 
     assert resp.status_code == 404
+
+
+def test_create_job_accepts_generate_images(job_repo):
+    resp = client.post(
+        "/api/v1/quiz/jobs",
+        json={
+            "user_input": "什么是 RAG",
+            "request_id": "req_1",
+            "generate_images": True,
+        },
+        headers=HEADERS,
+    )
+
+    assert resp.json()["code"] == 0
+    assert job_repo.rows[(7, "req_1")]["params_json"]["generate_images"] is True
+
+
+def test_get_completed_job_returns_image_url(job_repo):
+    job_id = _create().json()["data"]["job_id"]
+    quiz = _quiz()
+    quiz.questions[0].image_url = "https://cdn.example.com/q1.png"
+    row = job_repo.rows[(7, "req_1")]
+    row["status"] = "completed"
+    row["result_json"] = quiz.model_dump()
+
+    data = client.get(f"/api/v1/quiz/jobs/{job_id}", headers=HEADERS).json()["data"]
+
+    assert data["quiz"]["questions"][0]["image_url"] == "https://cdn.example.com/q1.png"

@@ -76,7 +76,26 @@ class Settings(BaseSettings):
     kb_chunk_overlap: int = 100
     kb_max_chunks_per_doc: int = 2000
     kb_retrieval_top_k: int = 4
+    # 首页出题知识库检索最低相关度（0-1）；低于该值的分块不进入研究简报
+    kb_min_relevance_score: float = 0.60
     kb_ingestion_concurrency: int = 2
+
+    # 题目配图（百炼 qwen-image-3.0 同步生图 + 腾讯云 COS 公有读桶）
+    enable_image_generation: bool = True
+    image_base_url: str = "https://dashscope.aliyuncs.com/api/v1"
+    image_model: str = "qwen-image-3.0"
+    image_size: str = "512*512"
+    image_timeout_seconds: int = 45
+    image_max_concurrency: int = 6
+    image_daily_limit: int = 100
+    image_max_retries: int = 3
+    image_retry_backoff_seconds: float = 2.0
+    cos_secret_id: str = ""
+    cos_secret_key: str = ""
+    cos_region: str = ""
+    cos_bucket: str = ""
+    cos_public_base_url: str = ""
+    cos_key_prefix: str = "question-images"
 
     # MySQL
     mysql_host: str = "localhost"
@@ -108,6 +127,17 @@ class Settings(BaseSettings):
     @property
     def knowledge_base_ready(self) -> bool:
         return bool(self.enable_knowledge_base and self.dashscope_api_key)
+
+    @property
+    def image_generation_ready(self) -> bool:
+        return bool(
+            self.enable_image_generation
+            and self.dashscope_api_key
+            and self.cos_secret_id
+            and self.cos_secret_key
+            and self.cos_region
+            and self.cos_bucket
+        )
 
 
 def _resolve_backend_path(value: str) -> Path:

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { View, Text, Textarea } from '@tarojs/components'
+import { View, Text, Textarea, Switch } from '@tarojs/components'
 import Taro, { useDidHide, useDidShow } from '@tarojs/taro'
 import CoinPill from '@/components/CoinPill'
 import ProgressRing from '@/components/ProgressRing'
@@ -26,6 +26,7 @@ interface ActiveJob {
   user_input: string
   question_count: number
   created_at: number
+  generate_images?: boolean
 }
 
 function readActiveJob(): ActiveJob | null {
@@ -51,6 +52,7 @@ function makeRequestId(): string {
 export default function Index() {
   const [text, setText] = useState('')
   const [generating, setGenerating] = useState(false)
+  const [withImages, setWithImages] = useState(false)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [history, setHistory] = useState<QuizHistoryItem[]>([])
 
@@ -163,6 +165,7 @@ export default function Index() {
     const active = readActiveJob()
     if (active && !pollingRef.current) {
       setText(prev => prev || active.user_input)
+      setWithImages(Boolean(active.generate_images))
       startPolling(active)
     }
   })
@@ -186,13 +189,15 @@ export default function Index() {
       const created = await createQuizJob({
         user_input: input,
         question_count: QUESTION_COUNT,
+        generate_images: withImages,
         request_id: makeRequestId()
       })
       const job: ActiveJob = {
         job_id: created.job_id,
         user_input: input,
         question_count: QUESTION_COUNT,
-        created_at: Date.now()
+        created_at: Date.now(),
+        generate_images: withImages
       }
       writeActiveJob(job)
       startPolling(job)
@@ -243,6 +248,19 @@ export default function Index() {
           maxlength={2000}
           onInput={e => setText(e.detail.value)}
         />
+        <View className='image-toggle'>
+          <View className='image-toggle__text'>
+            <Text className='image-toggle__label'>生成配图</Text>
+            <Text className='image-toggle__desc'>每题配一张相关图片，每日限额 100 张</Text>
+          </View>
+          <Switch
+            className='image-toggle__switch'
+            checked={withImages}
+            color='#ff7a2f'
+            disabled={generating}
+            onChange={e => setWithImages(e.detail.value)}
+          />
+        </View>
         <View className='home-actions'>
           <View className={`home-btn ${generating ? 'home-btn--disabled' : ''}`} onClick={onGenerate}>
             <View className='icon icon-arrow-right home-btn__icon' />

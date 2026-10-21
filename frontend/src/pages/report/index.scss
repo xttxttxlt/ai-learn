@@ -182,8 +182,41 @@
   color: #6d7c88;
 }
 
-/* 海报预览 */
-.poster {
+/* 题目回顾 */
+.review-item {
+  padding: 18px 0;
+  border-top: 2px dashed #f0e2d6;
+}
+.review-item:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+.review-item__stem {
+  display: block;
+  font-size: 28px;
+  line-height: 1.6;
+  font-weight: 700;
+  color: #4a5866;
+}
+.review-item__image {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  border: 2px solid #f0e2d6;
+  border-radius: 24px;
+  background: #fff;
+  overflow: hidden;
+}
+.review-item__answer {
+  display: block;
+  margin-top: 12px;
+  font-size: 26px;
+  line-height: 1.6;
+  font-weight: 700;
+  color: #29986d;
+}
+
+/* 海报预览 */.poster {
   position: relative;
   min-height: 224px;
   padding: 28px;

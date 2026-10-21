@@ -49,6 +49,7 @@ def test_knowledge_base_defaults():
     assert settings.kb_max_chunks_per_doc == 2000
     assert settings.kb_retrieval_top_k == 4
     assert settings.kb_ingestion_concurrency == 2
+    assert settings.kb_min_relevance_score == 0.60
 
 
 def test_relative_dirs_resolve_against_backend_dir():

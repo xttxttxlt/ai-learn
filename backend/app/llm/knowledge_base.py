@@ -287,11 +287,13 @@ def build_knowledge_base_tool(
         description = (
             "检索当前用户个人知识库中与问题相关的知识片段。"
             "适合内部资料、上传文档等私有内容；返回文档名、页码、相关度与分块摘要。"
+            "仅返回相关度达到阈值的内容；若返回“无足够相关内容”，说明知识库未覆盖该主题，"
+            "不应继续引用知识库结果。"
         )
 
     def _search(query: str) -> tuple[str, dict]:
         try:
-            results = store.search(
+            raw_results = store.search(
                 scope.user_id,
                 query,
                 top_k=settings.kb_retrieval_top_k,
@@ -301,8 +303,35 @@ def build_knowledge_base_tool(
             logger.warning("knowledge_base_search_failed", error=str(exc))
             return "[知识库检索失败] 请稍后重试", {"results": []}
 
-        if not results:
+        if not raw_results:
             return "[知识库无相关结果]", {"results": []}
+
+        results = raw_results
+        if not scope.is_document_scope:
+            threshold = max(0.0, min(1.0, settings.kb_min_relevance_score))
+            filtered = [result for result in raw_results if result.score >= threshold]
+            if not filtered:
+                top_score = max(result.score for result in raw_results)
+                logger.info(
+                    "knowledge_base_no_relevant_results",
+                    user_id=scope.user_id,
+                    top_score=round(top_score, 3),
+                    threshold=threshold,
+                )
+                return (
+                    f"[知识库无足够相关内容] 最高相关度 {top_score:.2f}，"
+                    f"低于阈值 {threshold:.2f}；请改用联网检索或按通用知识出题。",
+                    {"results": []},
+                )
+            if len(filtered) < len(raw_results):
+                logger.info(
+                    "knowledge_base_results_filtered",
+                    user_id=scope.user_id,
+                    raw_count=len(raw_results),
+                    kept_count=len(filtered),
+                    threshold=threshold,
+                )
+            results = filtered
 
         artifact = {
             "results": [
